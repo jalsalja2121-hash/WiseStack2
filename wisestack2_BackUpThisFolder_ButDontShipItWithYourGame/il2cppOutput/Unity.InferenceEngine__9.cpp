@@ -31335,7 +31335,7 @@ IL_000c:
 		return L_2;
 	}
 }
-// Method Definition Index: 72325
+// Method Definition Index: 72330
 IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR void Random__ctor_m84FE6BF5CD2493F5460F36A914836E3D41B22D94_inline (Random_tF24B964D3D5DE57D52CCDBF2E91ACE60F01F5F37* __this, uint32_t ___0_seed, const RuntimeMethod* method) 
 {
 	{
@@ -31349,7 +31349,7 @@ IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR void Random__ctor_m84FE6BF5CD2493
 		return;
 	}
 }
-// Method Definition Index: 72341
+// Method Definition Index: 72346
 IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR int32_t Random_NextInt_m794218A3A149A97A6276B37A546E381D44E0222B_inline (Random_tF24B964D3D5DE57D52CCDBF2E91ACE60F01F5F37* __this, int32_t ___0_min, int32_t ___1_max, const RuntimeMethod* method) 
 {
 	uint32_t V_0 = 0;
@@ -31835,7 +31835,7 @@ IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR int32_t Stack_1_get_Count_mD08AE7
 		return L_0;
 	}
 }
-// Method Definition Index: 93241
+// Method Definition Index: 93246
 IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR RuntimeObject* Enumerator_get_Current_m139A176CD271A0532D75BE08DA7831C8C45CE28F_gshared_inline (Enumerator_t72556E98D7DDBE118A973D782D523D15A96461C8* __this, const RuntimeMethod* method) 
 {
 	{
@@ -32260,7 +32260,7 @@ IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR int32_t ReadOnlySpan_1_get_Length
 		return L_0;
 	}
 }
-// Method Definition Index: 72386
+// Method Definition Index: 72391
 IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR uint32_t Random_NextState_m3C669E9C9DBB958FABE0879335C0732A91DA02F7_inline (Random_tF24B964D3D5DE57D52CCDBF2E91ACE60F01F5F37* __this, const RuntimeMethod* method) 
 {
 	{

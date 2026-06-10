@@ -6968,7 +6968,7 @@ IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR bool Vector3Int_op_Equality_mB100
 #pragma clang diagnostic ignored "-Winvalid-offsetof"
 #pragma clang diagnostic ignored "-Wunused-variable"
 #endif
-// Method Definition Index: 94412
+// Method Definition Index: 94417
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool GameObjectEventUnit_1_get_register_mEC488AF2D184AF87004DCAE7ADE8CEB45EB79C30_gshared (GameObjectEventUnit_1_t244CFE3519C9EC84E0322C0603B5C7DDA118D744* __this, const RuntimeMethod* method) 
 {
 	{
@@ -6976,7 +6976,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool GameObjectEventUnit_1_get_register_mEC48
 		return (bool)1;
 	}
 }
-// Method Definition Index: 94414
+// Method Definition Index: 94419
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* GameObjectEventUnit_1_CreateData_m273BAE44FAB8C2E4E45363590A3708E27794A902_gshared (GameObjectEventUnit_1_t244CFE3519C9EC84E0322C0603B5C7DDA118D744* __this, const RuntimeMethod* method) 
 {
 	{
@@ -6986,7 +6986,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* GameObjectEventUnit_1_CreateDa
 		return (RuntimeObject*)L_0;
 	}
 }
-// Method Definition Index: 94415
+// Method Definition Index: 94420
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR ValueInput_t2F9A2AA29F683A1C27C273BF8AABA4C2D9851392* GameObjectEventUnit_1_get_target_m316F4717C6C395D1D235B152D45870C3C2A6E2BF_gshared (GameObjectEventUnit_1_t244CFE3519C9EC84E0322C0603B5C7DDA118D744* __this, const RuntimeMethod* method) 
 {
 	{
@@ -6995,7 +6995,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR ValueInput_t2F9A2AA29F683A1C27C273BF8AABA4C2D
 		return L_0;
 	}
 }
-// Method Definition Index: 94416
+// Method Definition Index: 94421
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void GameObjectEventUnit_1_set_target_mD8941483963C2A260A5A9286E06B7EF22C405A98_gshared (GameObjectEventUnit_1_t244CFE3519C9EC84E0322C0603B5C7DDA118D744* __this, ValueInput_t2F9A2AA29F683A1C27C273BF8AABA4C2D9851392* ___0_value, const RuntimeMethod* method) 
 {
 	{
@@ -7006,7 +7006,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void GameObjectEventUnit_1_set_target_mD89414
 		return;
 	}
 }
-// Method Definition Index: 94417
+// Method Definition Index: 94422
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void GameObjectEventUnit_1_Definition_m1460746E2E1F542BC1F9E94B5D671D60C9DCACB7_gshared (GameObjectEventUnit_1_t244CFE3519C9EC84E0322C0603B5C7DDA118D744* __this, const RuntimeMethod* method) 
 {
 	static bool s_Il2CppMethodInitialized;
@@ -7032,7 +7032,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void GameObjectEventUnit_1_Definition_m146074
 		return;
 	}
 }
-// Method Definition Index: 94418
+// Method Definition Index: 94423
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR EventHook_t1C9E2570B55940C342214BACB5E9EC889A113157 GameObjectEventUnit_1_GetHook_mE432041C6D42C2706EDE10D52D0E38680E0FE9AB_gshared (GameObjectEventUnit_1_t244CFE3519C9EC84E0322C0603B5C7DDA118D744* __this, GraphReference_t721C982B418EEAA6BE9FA2BFB6A047A8E9362DA9* ___0_reference, const RuntimeMethod* method) 
 {
 	Data_t89A75602C216D348A7FFCDF29EE2005C59E488BF* V_0 = NULL;
@@ -7076,7 +7076,7 @@ IL_0014:
 		return L_9;
 	}
 }
-// Method Definition Index: 94419
+// Method Definition Index: 94424
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR String_t* GameObjectEventUnit_1_get_hookName_m501860A97C86959FDBA30F4ADC96A115E88CBC19_gshared (GameObjectEventUnit_1_t244CFE3519C9EC84E0322C0603B5C7DDA118D744* __this, const RuntimeMethod* method) 
 {
 	{
@@ -7088,7 +7088,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR String_t* GameObjectEventUnit_1_get_hookName_
 		IL2CPP_RAISE_MANAGED_EXCEPTION(L_1, method);
 	}
 }
-// Method Definition Index: 94420
+// Method Definition Index: 94425
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void GameObjectEventUnit_1_UpdateTarget_m0AC3DB51FD565BB80B650D4DA38C2EDA5239FDED_gshared (GameObjectEventUnit_1_t244CFE3519C9EC84E0322C0603B5C7DDA118D744* __this, GraphStack_tD9049F5FB5F8D9E9CD80764D18067D0F87343E7C* ___0_stack, const RuntimeMethod* method) 
 {
 	static bool s_Il2CppMethodInitialized;
@@ -7178,7 +7178,7 @@ IL_004b:
 		return;
 	}
 }
-// Method Definition Index: 94421
+// Method Definition Index: 94426
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void GameObjectEventUnit_1_StartListening_m5976EC479432C1C22085962D1EDE2BAFC8CBEA81_gshared (GameObjectEventUnit_1_t244CFE3519C9EC84E0322C0603B5C7DDA118D744* __this, GraphStack_tD9049F5FB5F8D9E9CD80764D18067D0F87343E7C* ___0_stack, bool ___1_updateTarget, const RuntimeMethod* method) 
 {
 	static bool s_Il2CppMethodInitialized;
@@ -7271,7 +7271,7 @@ IL_0047:
 		return;
 	}
 }
-// Method Definition Index: 94422
+// Method Definition Index: 94427
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void GameObjectEventUnit_1_StartListening_m98C7CA9B057FF9E5C360877FA0422B6C1CFCB8E3_gshared (GameObjectEventUnit_1_t244CFE3519C9EC84E0322C0603B5C7DDA118D744* __this, GraphStack_tD9049F5FB5F8D9E9CD80764D18067D0F87343E7C* ___0_stack, const RuntimeMethod* method) 
 {
 	{
@@ -7282,7 +7282,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void GameObjectEventUnit_1_StartListening_m98
 		return;
 	}
 }
-// Method Definition Index: 94423
+// Method Definition Index: 94428
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void GameObjectEventUnit_1__ctor_m3132C08E12D32039CB59C016E1E46950215FDEB1_gshared (GameObjectEventUnit_1_t244CFE3519C9EC84E0322C0603B5C7DDA118D744* __this, const RuntimeMethod* method) 
 {
 	{
@@ -7290,7 +7290,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void GameObjectEventUnit_1__ctor_m3132C08E12D
 		return;
 	}
 }
-// Method Definition Index: 94424
+// Method Definition Index: 94429
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR FlowGraph_tF9E42FECF535CD5BAB10F75672B5BCE285627A45* GameObjectEventUnit_1_Unity_VisualScripting_IUnit_get_graph_mE1F86981BC9CCCBAFDDABDEDD2A77DB71319C4F0_gshared (GameObjectEventUnit_1_t244CFE3519C9EC84E0322C0603B5C7DDA118D744* __this, const RuntimeMethod* method) 
 {
 	static bool s_Il2CppMethodInitialized;
@@ -25412,7 +25412,7 @@ IL_002d:
 		return ((int32_t)(((int32_t)L_4)^((int32_t)((int64_t)(L_5>>((int32_t)32))))));
 	}
 }
-// Method Definition Index: 82216
+// Method Definition Index: 82221
 IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR RuntimeObject* GraphElement_1_get_graph_mF018362F083AD86A9E71A2501520AA5666D4F4E4_gshared_inline (GraphElement_1_tE61715904D5A9E5C8385EAF991CC1F874C244DC4* __this, const RuntimeMethod* method) 
 {
 	{
