@@ -1368,14 +1368,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8b0a60ef26b3f9e4cba80eb874d45263, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Features.ARStackPreviewController
-  raycastManager: {fileID: 0}
+  raycastManager: {fileID: 915489163}
   statusText: {fileID: 1172950230}
   placeButton: {fileID: 1326389965}
   clearButton: {fileID: 102941728}
   boxWidth: 0.3
   boxLength: 0.3
   boxHeight: 0.25
-  maxLayers: 6
+  maxLayers: 8
   maxSafeHeight: 1.8
 --- !u!224 &839196003
 RectTransform:
