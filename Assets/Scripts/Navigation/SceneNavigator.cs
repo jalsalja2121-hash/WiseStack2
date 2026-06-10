@@ -10,16 +10,23 @@ namespace ARLogistics.Navigation
         {
             WireToHome("BackBtn");
             WireToHome("BackToHomeBtn");
+            WireToHome("HomeBtn");
+            Wire("DangerOverlayBtn", GoToDanger);
+            Wire("MeasurementBtn",   GoToMeasure);
+            Wire("ARMainBtn",        GoToARMain);
+            Wire("StackPreviewBtn",  GoToARMain);
         }
 
-        private void WireToHome(string goName)
+        private void WireToHome(string goName) => Wire(goName, GoToHome);
+
+        private void Wire(string goName, UnityEngine.Events.UnityAction action)
         {
             var go = GameObject.Find(goName);
             if (go == null) return;
             var btn = go.GetComponent<Button>();
             if (btn == null) return;
             btn.onClick.RemoveAllListeners();
-            btn.onClick.AddListener(GoToHome);
+            btn.onClick.AddListener(action);
         }
 
         public void GoToHome()    => SceneManager.LoadScene("HomeScene");

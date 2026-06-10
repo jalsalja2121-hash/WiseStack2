@@ -36,9 +36,20 @@ namespace ARLogistics.Features
             if (WarehouseManager.Instance != null)
             {
                 WarehouseManager.Instance.OnReportReady      += r => _lastReport = r;
-                WarehouseManager.Instance.OnFinalReportReady += r => _lastReport = r;
+                WarehouseManager.Instance.OnFinalReportReady += OnFinalReport;
             }
             SetStatus("📷 박스를 카메라에 비추면 위험 구간을 색상으로 표시합니다");
+        }
+
+        private void OnFinalReport(WarehouseReport r)
+        {
+            _lastReport = r;
+            if (statusText != null && !string.IsNullOrEmpty(r.geminiGuidance))
+            {
+                string g = r.geminiGuidance;
+                if (g.Length > 220) g = g.Substring(0, 220) + "...";
+                statusText.text = "🤖 " + g;
+            }
         }
 
         private void OnEnable()

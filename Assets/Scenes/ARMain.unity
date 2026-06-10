@@ -1355,7 +1355,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &839196002
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2689,7 +2689,6 @@ GameObject:
   - component: {fileID: 1297117577}
   - component: {fileID: 1297117576}
   - component: {fileID: 1297117580}
-  - component: {fileID: 1297117581}
   - component: {fileID: 1297117582}
   m_Layer: 0
   m_Name: AR Canvas
@@ -2803,28 +2802,6 @@ MonoBehaviour:
   reportPanel: {fileID: 1481786952}
   detectionTextTimeout: 3
   waitingMessage: "\u23F3 Gemini \uBD84\uC11D \uC911..."
---- !u!114 &1297117581
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1297117575}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 69540841a1b95954aa5f9cf5a75d9081, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Navigation.AppNavigator
-  homePanel: {fileID: 2110525516}
-  stackPreviewPanel: {fileID: 839196001}
-  dangerOverlayPanel: {fileID: 1701030784}
-  measurementPanel: {fileID: 371891482}
-  homeBtn: {fileID: 1581547958}
-  stackPreviewBtn: {fileID: 311104120}
-  dangerOverlayBtn: {fileID: 1114015979}
-  measurementBtn: {fileID: 910978464}
-  activeColor: {r: 0.18, g: 0.6, b: 1, a: 1}
-  inactiveColor: {r: 0.35, g: 0.35, b: 0.35, a: 1}
 --- !u!114 &1297117582
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4468,7 +4445,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2110525517
 RectTransform:
   m_ObjectHideFlags: 0
