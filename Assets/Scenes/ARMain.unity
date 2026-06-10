@@ -1349,6 +1349,7 @@ GameObject:
   m_Component:
   - component: {fileID: 839196003}
   - component: {fileID: 839196002}
+  - component: {fileID: 839196004}
   m_Layer: 0
   m_Name: StackPreviewPanel
   m_TagString: Untagged
@@ -1363,7 +1364,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 839196001}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8b0a60ef26b3f9e4cba80eb874d45263, type: 3}
   m_Name: 
@@ -1399,6 +1400,34 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &839196004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 839196001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4933af05c952d8c4db9a4800ce16fe7a, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Features.ARMainPalletStackPreview
+  yoloDetector: {fileID: 1823441577}
+  raycastManager: {fileID: 915489163}
+  palletClassName: pallet
+  minimumConfidence: 0.45
+  statusText: {fileID: 1172950230}
+  generateButton: {fileID: 1326389965}
+  resetButton: {fileID: 102941728}
+  palletWidth: 1.2
+  palletLength: 1
+  palletHeight: 0.15
+  columns: 3
+  rows: 3
+  layers: 8
+  boxHeight: 0.25
+  boxGap: 0.02
+  recommendedHeight: 1.8
 --- !u!1 &858706411
 GameObject:
   m_ObjectHideFlags: 0
@@ -4114,6 +4143,7 @@ MonoBehaviour:
   - "09_\uC758\uB958"
   - "10_\uC804\uBB38\uC2A4\uD3EC\uCE20/\uB808\uC800"
   - "11_\uD328\uC158\uC7A1\uD654"
+  - pallet
 --- !u!1 &1839319827
 GameObject:
   m_ObjectHideFlags: 0
