@@ -826,6 +826,57 @@ Transform:
   - {fileID: 1358936886}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &705739592
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 705739594}
+  - component: {fileID: 705739593}
+  m_Layer: 0
+  m_Name: Managers
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &705739593
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 705739592}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be7d684ed9d65134b8dd59047ceac829, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Detection.YoloDetector
+  modelAsset: {fileID: 5022602860645237092, guid: 5d74c1cfa5d9adc43ab1825af9bb16c2, type: 3}
+  backendType: 256
+  inputWidth: 640
+  inputHeight: 640
+  confidenceThreshold: 0.5
+  iouThreshold: 0.45
+  classNames: []
+--- !u!4 &705739594
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 705739592}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &747219647
 GameObject:
   m_ObjectHideFlags: 0
@@ -980,11 +1031,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b07b257050c2f7348ab97aec15256e59, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Features.ARMeasurementController
-  raycastManager: {fileID: 0}
   statusText: {fileID: 0}
   resultText: {fileID: 0}
-  measureButton: {fileID: 0}
+  analyzeButton: {fileID: 0}
   clearButton: {fileID: 0}
+  geminiApiKey: AQ.Ab8RN6JDmh6nu1AEs_pJTrubEhKsdVgV5YpFGmgLWcHyTLKxog
+  geminiModel: gemini-3.5-flash
+  detectionInterval: 0.5
 --- !u!114 &872824842
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1653,6 +1706,7 @@ GameObject:
   - component: {fileID: 1624513449}
   - component: {fileID: 1624513448}
   - component: {fileID: 1624513447}
+  - component: {fileID: 1624513451}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -1803,6 +1857,21 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
+--- !u!114 &1624513451
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1624513445}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 462015c03f74a7c46b8467e45f00285f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Detection.CameraFrameProvider
+  yoloDetector: {fileID: 0}
+  inferenceInterval: 0.5
+  inputSize: 640
 --- !u!1 &1722786312
 GameObject:
   m_ObjectHideFlags: 0
@@ -1891,3 +1960,4 @@ SceneRoots:
   - {fileID: 1476403216}
   - {fileID: 688588380}
   - {fileID: 615750653}
+  - {fileID: 705739594}
