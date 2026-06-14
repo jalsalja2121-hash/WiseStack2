@@ -918,6 +918,10 @@ MonoBehaviour:
   resultText: {fileID: 1395545016}
   measureButton: {fileID: 858706412}
   clearButton: {fileID: 1813628797}
+  firstPointColor: {r: 0, g: 1, b: 1, a: 1}
+  secondPointColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  markerScale: 0.04
+  lineWidth: 0.008
 --- !u!224 &371891484
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1410,24 +1414,30 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4933af05c952d8c4db9a4800ce16fe7a, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Features.ARMainPalletStackPreview
   yoloDetector: {fileID: 1823441577}
   raycastManager: {fileID: 915489163}
-  palletClassName: pallet
-  minimumConfidence: 0.45
+  arCamera: {fileID: 1684441339}
+  palletPrefab: {fileID: 5808244523230037948, guid: be196272e7776504bbed2eb64cb9d614, type: 3}
+  boxPreviewPrefab: {fileID: 1133674978017730884, guid: 8369d0bfcf494074795b75c3bcf2d69a, type: 3}
   statusText: {fileID: 1172950230}
-  generateButton: {fileID: 1326389965}
+  placeButton: {fileID: 1326389965}
   resetButton: {fileID: 102941728}
   palletWidth: 1.2
   palletLength: 1
   palletHeight: 0.15
-  columns: 3
-  rows: 3
-  layers: 8
-  boxHeight: 0.25
+  minimumConfidence: 0.45
+  productSizeId: 3
+  useFallbackProductWhenNotDetected: 1
+  fallbackProductWidth: 0.3
+  fallbackProductLength: 0.3
+  fallbackProductHeight: 0.25
+  recommendedStackHeight: 1.8
+  previewHeight: 2.1
   boxGap: 0.02
-  recommendedHeight: 1.8
+  safeColor: {r: 0.1, g: 0.9, b: 0.25, a: 0.5}
+  overHeightColor: {r: 1, g: 0.15, b: 0.1, a: 0.55}
 --- !u!1 &858706411
 GameObject:
   m_ObjectHideFlags: 0
