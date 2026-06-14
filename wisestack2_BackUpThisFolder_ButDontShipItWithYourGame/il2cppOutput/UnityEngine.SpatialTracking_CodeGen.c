@@ -94,14 +94,14 @@ static Il2CppMethodPointer s_methodPointers[41] =
 };
 static const int32_t s_InvokerIndices[41] = 
 {
-	33202,
+	33204,
 	19090,
 	19090,
-	33134,
+	33136,
 	26344,
 	25935,
 	26344,
-	33134,
+	33136,
 	18790,
 	14605,
 	18790,
@@ -133,7 +133,7 @@ static const int32_t s_InvokerIndices[41] =
 	19090,
 	19090,
 	11697,
-	10180,
+	10179,
 	19090,
 };
 IL2CPP_EXTERN_C const Il2CppCodeGenModule g_UnityEngine_SpatialTracking_CodeGenModule;

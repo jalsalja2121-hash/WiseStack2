@@ -151,8 +151,8 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 872824846}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.03, y: 0.55}
-  m_AnchorMax: {x: 0.97, y: 0.66}
+  m_AnchorMin: {x: 0.03, y: 0.57}
+  m_AnchorMax: {x: 0.97, y: 0.84}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -178,7 +178,7 @@ MonoBehaviour:
       m_Calls: []
   m_FontData:
     m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
-    m_FontSize: 34
+    m_FontSize: 30
     m_FontStyle: 0
     m_BestFit: 0
     m_MinSize: 10
@@ -189,7 +189,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "\U0001F4CD \uCCAB \uBC88\uC9F8 \uC9C0\uC810\uC744 \uC120\uD0DD\uD558\uC138\uC694"
+  m_Text: "\uBD84\uB958 \uACB0\uACFC\n\uCE74\uBA54\uB77C\uB85C \uD654\uBB3C\uC744 \uBE44\uCDB0\uC8FC\uC138\uC694"
 --- !u!222 &137771456
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -424,7 +424,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "\U0001F4D0 AR \uC808\uC218 \uCE21\uC815"
+  m_Text: "\U0001F4D0 \uD654\uBB3C \uD06C\uAE30 \uCE21\uC815"
 --- !u!222 &357270853
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -492,7 +492,7 @@ MonoBehaviour:
       m_Calls: []
   m_FontData:
     m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
-    m_FontSize: 32
+    m_FontSize: 28
     m_FontStyle: 0
     m_BestFit: 0
     m_MinSize: 10
@@ -503,7 +503,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 
+  m_Text: "\uBD84\uC11D \uACB0\uACFC\n\uD654\uBB3C\uC744 \uC778\uC2DD\uD55C \uB4A4 '\uBD84\uB958\uD558\uAE30'\uB97C \uB204\uB974\uC138\uC694"
 --- !u!222 &362943908
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -861,7 +861,18 @@ MonoBehaviour:
   inputHeight: 640
   confidenceThreshold: 0.5
   iouThreshold: 0.45
-  classNames: []
+  classNames:
+  - "01_\uAC00\uACF5\uC2DD\uD488"
+  - "02_\uC2E0\uC120\uC2DD\uD488"
+  - "03_\uC77C\uC0C1\uC6A9\uD488"
+  - "05_\uC758\uC57D\uD488/\uC758\uB8CC\uAE30\uAE30"
+  - "06_\uAD50\uC721/\uBB38\uD654\uC6A9\uD488"
+  - "07_\uB514\uC9C0\uD138/\uAC00\uC804"
+  - "08_\uAC00\uAD6C/\uC778\uD14C\uB9AC\uC5B4"
+  - "09_\uC758\uB958"
+  - "10_\uC804\uBB38\uC2A4\uD3EC\uCE20/\uB808\uC800"
+  - "11_\uD328\uC158\uC7A1\uD654"
+  - pallet
 --- !u!4 &705739594
 Transform:
   m_ObjectHideFlags: 0
@@ -1028,13 +1039,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 872824840}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b07b257050c2f7348ab97aec15256e59, type: 3}
+  m_Script: {fileID: 11500000, guid: e2a90d17f4cb4d2cae16dca4fc97bf32, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Features.ARMeasurementController
-  statusText: {fileID: 0}
-  resultText: {fileID: 0}
-  analyzeButton: {fileID: 0}
-  clearButton: {fileID: 0}
+  m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Features.MeasureSceneController
+  statusText: {fileID: 137771455}
+  resultText: {fileID: 362943907}
+  analyzeButton: {fileID: 1504205253}
+  clearButton: {fileID: 1191296560}
   geminiApiKey: AQ.Ab8RN6JDmh6nu1AEs_pJTrubEhKsdVgV5YpFGmgLWcHyTLKxog
   geminiModel: gemini-3.5-flash
   detectionInterval: 0.5
@@ -1128,8 +1139,8 @@ RectTransform:
   - {fileID: 272733528}
   - {fileID: 362943906}
   - {fileID: 137771454}
-  - {fileID: 1108086557}
   - {fileID: 418099546}
+  - {fileID: 1108086557}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -1171,8 +1182,8 @@ RectTransform:
   - {fileID: 1191296559}
   m_Father: {fileID: 872824846}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 1, y: 0.14}
+  m_AnchorMin: {x: 0, y: 0.08}
+  m_AnchorMax: {x: 1, y: 0.22}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -1684,7 +1695,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "\U0001F4CD \uC9C0\uC810 \uCC0D\uAE30"
+  m_Text: "\uBD84\uB958\uD558\uAE30"
 --- !u!222 &1596474417
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1942,7 +1953,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "\uC9C0\uC6B0\uAE30"
+  m_Text: "\uCD08\uAE30\uD654"
 --- !u!222 &1722786315
 CanvasRenderer:
   m_ObjectHideFlags: 0
