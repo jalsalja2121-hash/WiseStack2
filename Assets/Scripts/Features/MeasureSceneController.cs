@@ -50,6 +50,8 @@ namespace ARLogistics.Features
         private YoloDetector _yolo;
         private float _nextDetectionTime;
         private bool _analyzing;
+
+        private string _savedMeasurementSummary = "";
         private string _analysisSummary = "";
 
         private void Awake()
@@ -163,8 +165,13 @@ namespace ARLogistics.Features
                 ? Mathf.Max(0, Mathf.FloorToInt(warehouseArea / palletArea))
                 : 0;
 
+            SaveBestBoxMeasurement();
+
             var result = new StringBuilder();
             var geminiLines = new List<string>();
+
+            if (!string.IsNullOrEmpty(_savedMeasurementSummary))
+                result.AppendLine(_savedMeasurementSummary);
             result.AppendLine("분석 결과");
             result.AppendLine($"창고 면적 {warehouseArea:F0}m² · 적재 가능 높이 {ceilingHeight:F2}m");
             result.AppendLine($"팔레트 {palletWidth:F2}m × {palletLength:F2}m · 배치 가능 {palletCount}개");
@@ -263,6 +270,8 @@ namespace ARLogistics.Features
         private void ClearAll()
         {
             _lastDetections.Clear();
+
+            _savedMeasurementSummary = "";
             _analysisSummary = "";
             _analyzing = false;
 
@@ -387,5 +396,31 @@ namespace ARLogistics.Features
             return responseJson.Substring(start, end - start)
                 .Replace("\\n", "\n").Replace("\\\"", "\"");
         }
-    }
+    
+
+        private void SaveBestBoxMeasurement()
+        {
+            DetectionResult? bestBox = null;
+            foreach (var detection in _lastDetections)
+            {
+                if (detection.classId == PalletClassId)
+                    continue;
+
+                if (!bestBox.HasValue || detection.confidence > bestBox.Value.confidence)
+                    bestBox = detection;
+            }
+
+            if (!bestBox.HasValue)
+                return;
+
+            DetectionResult selected = bestBox.Value;
+            GetCargoSpec(selected.classId, out float width, out float depth,
+                out float height, out _, out _);
+            string cargoName = ResolveCargoName(selected.classId);
+
+            _savedMeasurementSummary = $"상자 크기 저장 완료 · {width:F2}m × {depth:F2}m × {height:F2}m";
+            BoxMeasurementStore.Save(width, depth, height, selected.classId, cargoName);
+            Debug.Log($"[MeasureScene] 상자 크기 저장: {width:F3}m x {depth:F3}m x {height:F3}m ({cargoName})");
+        }
+}
 }

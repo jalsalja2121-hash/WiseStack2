@@ -34,13 +34,8 @@ namespace ARLogistics.Features
         [SerializeField, Min(0.1f)] private float palletWidth = 1.1f;
         [SerializeField, Min(0.1f)] private float palletLength = 1.1f;
         [SerializeField, Min(0.01f)] private float palletHeight = 0.15f;
-        [Header("Product")]
+        [Header("Detection")]
         [SerializeField, Range(0f, 1f)] private float minimumConfidence = 0.45f;
-        [SerializeField, Range(1, 6)] private int productSizeId = 3;
-        [SerializeField] private bool useFallbackProductWhenNotDetected = true;
-        [SerializeField, Min(0.01f)] private float fallbackProductWidth = 0.3f;
-        [SerializeField, Min(0.01f)] private float fallbackProductLength = 0.3f;
-        [SerializeField, Min(0.01f)] private float fallbackProductHeight = 0.25f;
         [Header("Stack Rules")]
         [SerializeField, Min(0.1f)] private float recommendedStackHeight = 1.8f;
         [SerializeField, Min(0.1f)] private float previewHeight = 2.1f;
@@ -57,6 +52,9 @@ namespace ARLogistics.Features
         private readonly List<GameObject> spawnedBoxes = new();
         private GameObject palletAnchor;
         private Transform palletTransform;
+
+        private BoxMeasurement currentMeasurement;
+        private bool hasMeasurement;
         private DetectionResult? latestProductDetection;
         private bool placementEnabled = true;
         private int lastProcessedTouchFrame = -1;
@@ -69,6 +67,7 @@ namespace ARLogistics.Features
             placeButton?.onClick.AddListener(EnablePlacement);
             resetButton?.onClick.AddListener(ResetSimulation);
             ResetSimulation();
+            TryLoadMeasurement(true);
         }
 
         private void OnDisable()
@@ -96,6 +95,12 @@ namespace ARLogistics.Features
             if (arCamera == null) arCamera = Camera.main;
             if (statusText == null) statusText = GameObject.Find("SP_StatusText")?.GetComponent<Text>();
             if (placeButton == null) placeButton = GameObject.Find("SP_PlaceBtn")?.GetComponent<Button>();
+
+
+            if (ARLogistics.AppSettings.PalletWidth > 0.1f)
+                palletWidth = ARLogistics.AppSettings.PalletWidth;
+            if (ARLogistics.AppSettings.PalletLength > 0.1f)
+                palletLength = ARLogistics.AppSettings.PalletLength;
             if (resetButton == null) resetButton = GameObject.Find("SP_ClearBtn")?.GetComponent<Button>();
         }
 
@@ -108,25 +113,35 @@ namespace ARLogistics.Features
                     if (detection.confidence < minimumConfidence) continue;
                     if (!best.HasValue || detection.confidence > best.Value.confidence) best = detection;
                 }
+
             latestProductDetection = best;
-            if (palletAnchor != null && best.HasValue) GenerateStackPreview();
         }
 
         public void EnablePlacement()
         {
-            if (palletAnchor != null) { GenerateStackPreview(); return; }
+            if (!hasMeasurement && !TryLoadMeasurement(true))
+                return;
+
+            if (palletAnchor != null)
+            {
+                GenerateStackPreview();
+                return;
+            }
+
             placementEnabled = true;
-            SetStatus(PlacementMessage);
+            SetStatus($"상자 크기 불러오기 완료\n{FormatMeasurement()}\n{PlacementMessage}");
         }
 
         public void ResetSimulation()
         {
             ClearRuntimeObjects();
             latestProductDetection = null;
+            currentMeasurement = default;
+            hasMeasurement = false;
             EstimatedCapacity = 0;
             RemainingSpacePercent = 0f;
             placementEnabled = true;
-            SetStatus(PlacementMessage);
+            SetStatus("상자 크기를 먼저 측정해주세요");
         }
 
         private void TryPlacePallet(Vector2 screenPosition)
@@ -173,28 +188,41 @@ namespace ARLogistics.Features
         private void GenerateStackPreview()
         {
             ClearBoxes();
+            EstimatedCapacity = 0;
+            RemainingSpacePercent = 0f;
+
             if (palletTransform == null) return;
-            ProductDimensions product;
-            if (latestProductDetection.HasValue)
+            if (!hasMeasurement && !TryLoadMeasurement(false))
             {
-                DetectionResult detection = latestProductDetection.Value;
-                ProductSpecTable.Spec spec = ProductSpecTable.Get(detection.classId, productSizeId);
-                product = new ProductDimensions(spec.WidthM, spec.LengthM, spec.HeightM);
+                SetStatus("상자 크기를 먼저 측정해주세요");
+                return;
             }
-            else if (useFallbackProductWhenNotDetected)
-                product = new ProductDimensions(fallbackProductWidth, fallbackProductLength, fallbackProductHeight);
-            else { SetStatus(PalletCreatedMessage + "\n제품 인식을 기다리는 중..."); return; }
+
+            var product = new ProductDimensions(
+                currentMeasurement.WidthM,
+                currentMeasurement.DepthM,
+                currentMeasurement.HeightM);
 
             if (!TryCalculateLayout(product, out StackLayout layout))
             {
-                SetStatus(PalletCreatedMessage + "\n제품이 팔레트보다 큽니다");
+                SetStatus($"상자 크기 불러오기 완료\n{FormatMeasurement()}\n상자가 팔레트보다 크거나 적재 높이를 초과합니다");
                 return;
             }
+
             SpawnBoxes(product, layout);
-            EstimatedCapacity = layout.columns * layout.rows * layout.safeLayers;
-            float usedArea = layout.columns * layout.rows * product.width * product.length;
-            RemainingSpacePercent = Mathf.Clamp01(1f - usedArea / (palletWidth * palletLength)) * 100f;
-            SetStatus($"{PalletCreatedMessage}\n예상 적재량 : {EstimatedCapacity}개\n남은 공간 : {RemainingSpacePercent:F1}%");
+            int perLayer = layout.columns * layout.rows;
+            EstimatedCapacity = perLayer * layout.safeLayers;
+            float usedArea = perLayer * layout.boxWidth * layout.boxLength;
+            float palletArea = palletWidth * palletLength;
+            float usagePercent = palletArea > 0f ? Mathf.Clamp01(usedArea / palletArea) * 100f : 0f;
+            RemainingSpacePercent = 100f - usagePercent;
+
+            SetStatus(
+                $"상자 크기 불러오기 완료\n{FormatMeasurement()}\n" +
+                $"예상 적재량: {EstimatedCapacity}개\n" +
+                $"한 층 적재량: {perLayer}개\n" +
+                $"예상 층수: {layout.safeLayers}층\n" +
+                $"바닥 사용률: {usagePercent:F1}% · 남은 공간: {RemainingSpacePercent:F1}%");
         }
 
         private bool TryCalculateLayout(ProductDimensions product, out StackLayout layout)
@@ -336,5 +364,29 @@ namespace ARLogistics.Features
                 this.boxLength = boxLength;
             }
         }
-    }
+    
+
+        private bool TryLoadMeasurement(bool updateStatus)
+        {
+            if (!BoxMeasurementStore.TryGet(out currentMeasurement))
+            {
+                hasMeasurement = false;
+                if (updateStatus) SetStatus("상자 크기를 먼저 측정해주세요");
+                return false;
+            }
+
+            hasMeasurement = true;
+            if (updateStatus)
+                SetStatus($"상자 크기 불러오기 완료\n{FormatMeasurement()}\n{PlacementMessage}");
+            return true;
+        }
+
+        private string FormatMeasurement()
+        {
+            string source = string.IsNullOrEmpty(currentMeasurement.SourceName)
+                ? string.Empty
+                : $" ({currentMeasurement.SourceName})";
+            return $"상자 {currentMeasurement.WidthM:F2}m × {currentMeasurement.DepthM:F2}m × {currentMeasurement.HeightM:F2}m{source}";
+        }
+}
 }
