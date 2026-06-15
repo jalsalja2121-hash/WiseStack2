@@ -913,15 +913,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b07b257050c2f7348ab97aec15256e59, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Features.ARMeasurementController
-  raycastManager: {fileID: 0}
   statusText: {fileID: 1201310697}
   resultText: {fileID: 1395545016}
-  measureButton: {fileID: 858706412}
+  analyzeButton: {fileID: 0}
   clearButton: {fileID: 1813628797}
-  firstPointColor: {r: 0, g: 1, b: 1, a: 1}
-  secondPointColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  markerScale: 0.04
-  lineWidth: 0.008
+  geminiApiKey: 
+  geminiModel: gemini-3.5-flash
+  detectionInterval: 0.5
 --- !u!224 &371891484
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1352,7 +1350,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 839196003}
-  - component: {fileID: 839196002}
   - component: {fileID: 839196004}
   m_Layer: 0
   m_Name: StackPreviewPanel
@@ -1361,27 +1358,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &839196002
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 839196001}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8b0a60ef26b3f9e4cba80eb874d45263, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Features.ARStackPreviewController
-  raycastManager: {fileID: 915489163}
-  statusText: {fileID: 1172950230}
-  placeButton: {fileID: 1326389965}
-  clearButton: {fileID: 102941728}
-  boxWidth: 0.3
-  boxLength: 0.3
-  boxHeight: 0.25
-  maxLayers: 8
-  maxSafeHeight: 1.8
 --- !u!224 &839196003
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1428,11 +1404,6 @@ MonoBehaviour:
   palletLength: 1
   palletHeight: 0.15
   minimumConfidence: 0.45
-  productSizeId: 3
-  useFallbackProductWhenNotDetected: 1
-  fallbackProductWidth: 0.3
-  fallbackProductLength: 0.3
-  fallbackProductHeight: 0.25
   recommendedStackHeight: 1.8
   previewHeight: 2.1
   boxGap: 0.02
