@@ -410,6 +410,7 @@ UnityEngine.Canvas::get_scaleFactor_Injected
 UnityEngine.Canvas::SetExternalCanvasEnabled
 UnityEngine.Canvas::get_pixelRect_Injected
 UnityEngine.Canvas::get_renderingDisplaySize_Injected
+UnityEngine.Canvas::set_additionalShaderChannels_Injected
 UnityEngine.Canvas::set_overrideSorting_Injected
 UnityEngine.Canvas::set_referencePixelsPerUnit_Injected
 UnityEngine.Canvas::set_renderMode_Injected
@@ -417,6 +418,7 @@ UnityEngine.Canvas::set_scaleFactor_Injected
 UnityEngine.Canvas::set_sortingLayerID_Injected
 UnityEngine.Canvas::set_sortingOrder_Injected
 UnityEngine.Canvas::set_worldCamera_Injected
+UnityEngine.Canvas::get_additionalShaderChannels_Injected
 UnityEngine.Canvas::get_renderMode_Injected
 UnityEngine.CanvasGroup::get_blocksRaycasts_Injected
 UnityEngine.CanvasGroup::get_ignoreParentGroups_Injected
@@ -424,10 +426,12 @@ UnityEngine.CanvasGroup::get_interactable_Injected
 UnityEngine.CanvasGroup::get_alpha_Injected
 UnityEngine.CanvasGroup::set_alpha_Injected
 UnityEngine.CanvasGroup::set_ignoreParentGroups_Injected
+UnityEngine.CanvasRenderer::get_cullTransparentMesh_Injected
 UnityEngine.CanvasRenderer::get_cull_Injected
 UnityEngine.CanvasRenderer::get_hasMoved_Injected
 UnityEngine.CanvasRenderer::get_absoluteDepth_Injected
 UnityEngine.CanvasRenderer::get_materialCount_Injected
+UnityEngine.CanvasRenderer::GetMaterial_Injected
 UnityEngine.CanvasRenderer::Clear_Injected
 UnityEngine.CanvasRenderer::CreateUIVertexStreamInternal
 UnityEngine.CanvasRenderer::DisableRectClipping_Injected
@@ -444,6 +448,7 @@ UnityEngine.CanvasRenderer::SetTexture_Injected
 UnityEngine.CanvasRenderer::SplitIndicesStreamsInternal
 UnityEngine.CanvasRenderer::SplitUIVertexStreamsInternal
 UnityEngine.CanvasRenderer::set_clippingSoftness_Injected
+UnityEngine.CanvasRenderer::set_cullTransparentMesh_Injected
 UnityEngine.CanvasRenderer::set_cull_Injected
 UnityEngine.CanvasRenderer::set_hasPopInstruction_Injected
 UnityEngine.CanvasRenderer::set_materialCount_Injected
@@ -581,6 +586,7 @@ UnityEngine.Font::get_fontSize_Injected
 UnityEngine.Font::GetDefault_Injected
 UnityEngine.Font::get_material_Injected
 UnityEngine.Font::GetOSFallbacks
+UnityEngine.Font::GetPathsToOSFonts
 UnityEngine.Font::Internal_CreateFont_Injected
 UnityEngine.FrameTimingManager::GetLatestTimings_Injected
 UnityEngine.FrameTimingManager::CaptureFrameTimings
@@ -933,6 +939,7 @@ UnityEngine.Material::DisableKeyword_Injected
 UnityEngine.Material::DisableLocalKeyword_Injected
 UnityEngine.Material::EnableKeyword_Injected
 UnityEngine.Material::EnableLocalKeyword_Injected
+UnityEngine.Material::GetColorImpl_Injected
 UnityEngine.Material::SetBufferImpl_Injected
 UnityEngine.Material::SetColorImpl_Injected
 UnityEngine.Material::SetConstantBufferImpl_Injected
@@ -1009,6 +1016,7 @@ UnityEngine.Mesh::SetIndicesNativeArrayImpl_Injected
 UnityEngine.Mesh::SetNativeArrayForChannelImpl_Injected
 UnityEngine.Mesh::SetVertexBufferParamsFromArray_Injected
 UnityEngine.Mesh::UploadMeshDataImpl_Injected
+UnityEngine.Mesh::get_bounds_Injected
 UnityEngine.Mesh::set_bounds_Injected
 UnityEngine.Mesh::set_indexBufferTarget_Injected
 UnityEngine.Mesh::set_indexFormat_Injected
@@ -1127,7 +1135,11 @@ UnityEngine.PlayerConnectionInternal::RegisterInternal_Injected
 UnityEngine.PlayerConnectionInternal::SendMessage_Injected
 UnityEngine.PlayerConnectionInternal::UnregisterInternal_Injected
 UnityEngine.PlayerPrefs::HasKey_Injected
+UnityEngine.PlayerPrefs::TrySetFloat_Injected
+UnityEngine.PlayerPrefs::TrySetInt_Injected
 UnityEngine.PlayerPrefs::TrySetSetString_Injected
+UnityEngine.PlayerPrefs::GetInt_Injected
+UnityEngine.PlayerPrefs::GetFloat_Injected
 UnityEngine.PlayerPrefs::GetString_Injected
 UnityEngine.PlayerPrefs::Save
 UnityEngine.Profiling.Profiler::GetRuntimeMemorySizeLong_Injected
@@ -1202,14 +1214,21 @@ UnityEngine.Renderer::get_sortingGroupID_Injected
 UnityEngine.Renderer::get_sortingGroupOrder_Injected
 UnityEngine.Renderer::get_sortingLayerID_Injected
 UnityEngine.Renderer::get_sortingOrder_Injected
+UnityEngine.Renderer::GetMaterial_Injected
 UnityEngine.Renderer::GetSharedMaterial_Injected
+UnityEngine.Renderer::Internal_GetPropertyBlock_Injected
+UnityEngine.Renderer::Internal_SetPropertyBlock_Injected
 UnityEngine.Renderer::SetMaterialArray_Injected
 UnityEngine.Renderer::SetMaterial_Injected
 UnityEngine.Renderer::get_bounds_Injected
 UnityEngine.Renderer::set_allowGPUDrivenRendering_Injected
 UnityEngine.Renderer::set_enabled_Injected
 UnityEngine.Renderer::set_localBounds_Injected
+UnityEngine.Renderer::set_receiveShadows_Injected
+UnityEngine.Renderer::set_shadowCastingMode_Injected
 UnityEngine.Renderer::set_smallMeshCulling_Injected
+UnityEngine.Renderer::set_sortingLayerID_Injected
+UnityEngine.Renderer::set_sortingOrder_Injected
 UnityEngine.Renderer::GetSharedMaterialArray_Injected
 UnityEngine.Rendering.AsyncGPUReadback::Request_Internal_ComputeBuffer_2_Injected
 UnityEngine.Rendering.AsyncGPUReadback::Request_Internal_GraphicsBuffer_1_Injected
@@ -1677,6 +1696,7 @@ UnityEngine.TextAsset::Internal_CreateInstance_Injected
 UnityEngine.TextCore.LowLevel.FontEngine::IsColorFontFace
 UnityEngine.TextCore.LowLevel.FontEngine::TryAddGlyphToTexture_Internal_Injected
 UnityEngine.TextCore.LowLevel.FontEngine::TryAddGlyphsToTexture_Internal_Injected
+UnityEngine.TextCore.LowLevel.FontEngine::TryGetGlyphWithIndexValue_Internal
 UnityEngine.TextCore.LowLevel.FontEngine::TryGetGlyphWithUnicodeValue_Internal
 UnityEngine.TextCore.LowLevel.FontEngine::TryGetSystemFontReference_Internal_Injected
 UnityEngine.TextCore.LowLevel.FontEngine::GetFaceInfo_Internal
@@ -1684,6 +1704,7 @@ UnityEngine.TextCore.LowLevel.FontEngine::GetLigatureSubstitutionRecordsFromMars
 UnityEngine.TextCore.LowLevel.FontEngine::GetMarkToBaseAdjustmentRecordsFromMarshallingArray_Injected
 UnityEngine.TextCore.LowLevel.FontEngine::GetMarkToMarkAdjustmentRecordsFromMarshallingArray_Injected
 UnityEngine.TextCore.LowLevel.FontEngine::GetPairAdjustmentRecordsFromMarshallingArray_Injected
+UnityEngine.TextCore.LowLevel.FontEngine::LoadFontFace_Internal_Injected
 UnityEngine.TextCore.LowLevel.FontEngine::LoadFontFace_With_Size_And_FaceIndex_Internal_Injected
 UnityEngine.TextCore.LowLevel.FontEngine::LoadFontFace_With_Size_and_FaceIndex_FromFont_Internal_Injected
 UnityEngine.TextCore.LowLevel.FontEngine::LoadFontFace_With_Size_by_FamilyName_and_StyleName_Internal_Injected
@@ -1691,6 +1712,9 @@ UnityEngine.TextCore.LowLevel.FontEngine::PopulateLigatureSubstitutionRecordMars
 UnityEngine.TextCore.LowLevel.FontEngine::PopulateMarkToBaseAdjustmentRecordMarshallingArray_Injected
 UnityEngine.TextCore.LowLevel.FontEngine::PopulateMarkToMarkAdjustmentRecordMarshallingArray_Injected
 UnityEngine.TextCore.LowLevel.FontEngine::PopulatePairAdjustmentRecordMarshallingArray_Injected
+UnityEngine.TextCore.LowLevel.FontEngine::PopulatePairAdjustmentRecordMarshallingArray_from_KernTable_Injected
+UnityEngine.TextCore.LowLevel.FontEngine::UnloadFontFace_Internal
+UnityEngine.TextCore.LowLevel.FontEngine::GetFontFaces_Internal
 UnityEngine.TextCore.LowLevel.FontEngine::GetGlyphIndex
 UnityEngine.TextCore.LowLevel.FontEngine::GetVariantGlyphIndex
 UnityEngine.TextCore.LowLevel.FontEngine::GetAllMarkToBaseAdjustmentRecords_Injected
@@ -1846,6 +1870,7 @@ UnityEngine.Transform::InverseTransformDirection_Injected
 UnityEngine.Transform::InverseTransformPoint_Injected
 UnityEngine.Transform::RotateAroundInternal_Injected
 UnityEngine.Transform::SetAsFirstSibling_Injected
+UnityEngine.Transform::SetAsLastSibling_Injected
 UnityEngine.Transform::SetLocalPositionAndRotation_Injected
 UnityEngine.Transform::SetParent_Injected
 UnityEngine.Transform::SetPositionAndRotation_Injected
