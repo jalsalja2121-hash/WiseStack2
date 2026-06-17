@@ -1904,6 +1904,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6a73f31a0d099d84fae71ed14363a4c1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.DangerScene.BoxStackAnalyzer
+  cameraVerticalFovDegrees: 60
+  assumedDistanceM: 2
 --- !u!4 &1920098615
 Transform:
   m_ObjectHideFlags: 0
