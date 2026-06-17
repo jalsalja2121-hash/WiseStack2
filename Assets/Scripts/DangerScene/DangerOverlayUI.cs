@@ -1,16 +1,15 @@
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
 
 namespace ARLogistics.DangerScene
 {
     public class DangerOverlayUI : MonoBehaviour
     {
         [Header("UI References")]
-        [SerializeField] private Image            overlayPanel;
-        [SerializeField] private TextMeshProUGUI  dangerLabel;
-        [SerializeField] private TextMeshProUGUI  detailText;
-        [SerializeField] private TextMeshProUGUI  geminiAdviceText;
+        [SerializeField] private Image  overlayPanel;
+        [SerializeField] private Text   dangerLabel;
+        [SerializeField] private Text   detailText;
+        [SerializeField] private Text   geminiAdviceText;
 
         [Header("Colors")]
         [SerializeField] private Color safeColor    = new Color(0.10f, 0.85f, 0.20f, 0.80f);
