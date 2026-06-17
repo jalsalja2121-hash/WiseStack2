@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-using UnityEngine;
-using ARLogistics.Detection;
 using ARLogistics.Data;
+using ARLogistics.Detection;
+using UnityEngine;
 
 namespace ARLogistics.DangerScene
 {
@@ -9,81 +9,225 @@ namespace ARLogistics.DangerScene
 
     public class BoxStackAnalyzer : MonoBehaviour
     {
-        private const float SafeHeight     = 1.2f;
-        private const float DangerHeight   = 2.0f;
-        private const int   DangerBoxCount = 8;
-        private const float SafeWeight     = 25f;
-        private const float DangerWeight   = 40f;
+        [Header("Risk Thresholds")]
+        [SerializeField, Min(0f)] private float warningHeightM = 1.2f;
+        [SerializeField, Min(0f)] private float dangerHeightM = 2.0f;
+        [SerializeField, Min(1)] private int warningBoxCount = 5;
+        [SerializeField, Min(1)] private int dangerBoxCount = 8;
+        [SerializeField, Min(0f)] private float warningWeightKg = 25f;
+        [SerializeField, Min(0f)] private float dangerWeightKg = 40f;
 
-        [Header("시각적 높이 추정 (카메라 기반)")]
-        [Tooltip("카메라 수직 화각(도). 스마트폰 기본 카메라 기준 약 60°")]
-        [SerializeField] private float cameraVerticalFovDegrees = 60f;
+        [Header("Camera Based Height Estimate")]
+        [Tooltip("Vertical camera FOV used by the distance-based fallback estimate.")]
+        [SerializeField, Min(1f)] private float cameraVerticalFovDegrees = 60f;
 
-        [Tooltip("박스 적재물까지의 추정 거리(m). 현장 환경에 맞게 조정하세요.")]
-        [SerializeField] private float assumedDistanceM = 2.0f;
+        [Tooltip("Fallback distance to the detected stack in meters.")]
+        [SerializeField, Min(0.1f)] private float assumedDistanceM = 2.0f;
 
-        // YOLO 탐지 결과 기반 분석 (메인)
-        public DangerLevel Analyze(List<DetectionResult> detections,
-                                   out int   boxCount,
-                                   out float estimatedHeightM,
-                                   out float totalWeightKg)
+        [Header("Product Based Height Estimate")]
+        [Tooltip("Use product dimensions and bbox aspect ratio to estimate stack height.")]
+        [SerializeField] private bool useProductAspectHeight = true;
+
+        [Tooltip("Slightly bias visual estimates upward to avoid marking tall stacks safe.")]
+        [SerializeField, Min(0.1f)] private float aspectHeightSafetyMultiplier = 1.1f;
+
+        [Tooltip("Use the latest measured box dimensions when they match the detected class.")]
+        [SerializeField] private bool preferMeasuredDimensions = true;
+
+        [Tooltip("Upper guardrail for visual estimates.")]
+        [SerializeField, Min(0.5f)] private float maxEstimatedHeightM = 6f;
+
+        [SerializeField] private bool logAnalysisDetails;
+
+        public DangerLevel Analyze(
+            List<DetectionResult> detections,
+            out int boxCount,
+            out float estimatedHeightM,
+            out float totalWeightKg)
         {
-            boxCount         = detections != null ? detections.Count : 0;
+            boxCount = 0;
             estimatedHeightM = 0f;
-            totalWeightKg    = 0f;
+            totalWeightKg = 0f;
 
-            if (detections != null && detections.Count > 0)
+            if (detections == null || detections.Count == 0)
+                return Evaluate(boxCount, estimatedHeightM, totalWeightKg);
+
+            var groups = GroupByClass(detections);
+            foreach (var group in groups)
             {
-                // 높이: 화면 내 바운딩박스 전체 범위 → 실세계 높이 변환
-                estimatedHeightM = EstimateVisualHeight(detections);
+                BoxSpec spec = ResolveSpec(group.Key);
+                Rect unionRect = UnionNormalizedRects(group.Value);
+                float stackHeightM = EstimateStackHeight(unionRect, spec);
+                int estimatedCount = EstimateBoxCount(group.Value.Count, stackHeightM, spec);
+                float stackWeightKg = estimatedCount * spec.WeightKg;
 
-                // 무게: ProductSpecTable 기반 클래스별 평균 무게 합산
-                foreach (var det in detections)
-                    totalWeightKg += ProductSpecTable.Get(det.classId).WeightKg;
+                boxCount += estimatedCount;
+                estimatedHeightM = Mathf.Max(estimatedHeightM, stackHeightM);
+                totalWeightKg += stackWeightKg;
+
+                if (logAnalysisDetails)
+                {
+                    Debug.Log(
+                        $"[BoxStackAnalyzer] class={group.Key}, detections={group.Value.Count}, " +
+                        $"estimatedCount={estimatedCount}, bbox={FormatRect(unionRect)}, " +
+                        $"height={stackHeightM:F2}m, weight={stackWeightKg:F1}kg");
+                }
             }
 
             return Evaluate(boxCount, estimatedHeightM, totalWeightKg);
         }
 
-        // 프리셋 데모용 수동 입력 오버로드
         public DangerLevel Analyze(int boxCount, float heightM, float weightKg)
             => Evaluate(boxCount, heightM, weightKg);
 
-        /// <summary>
-        /// YOLO 바운딩박스의 화면 상 Y범위를 카메라 FOV와 거리를 통해 실세계 높이(m)로 변환합니다.
-        /// union_height(비율) × 2 × distance × tan(vFOV/2)
-        /// </summary>
-        private float EstimateVisualHeight(List<DetectionResult> detections)
-        {
-            float minY = float.MaxValue; // 화면 가장 위쪽 (박스 스택 상단)
-            float maxY = float.MinValue; // 화면 가장 아래쪽 (박스 스택 하단)
-
-            foreach (var det in detections)
-            {
-                float top    = det.boundingBox.y;
-                float bottom = det.boundingBox.y + det.boundingBox.height;
-                if (top    < minY) minY = top;
-                if (bottom > maxY) maxY = bottom;
-            }
-
-            float unionHeightNorm = Mathf.Clamp01(maxY - minY);
-
-            // 카메라 수직 FOV 기준 화면 전체가 커버하는 실세계 높이
-            float vFovRad        = cameraVerticalFovDegrees * Mathf.Deg2Rad;
-            float viewableHeight = 2f * assumedDistanceM * Mathf.Tan(vFovRad * 0.5f);
-
-            return unionHeightNorm * viewableHeight;
-        }
-
         private DangerLevel Evaluate(int boxCount, float heightM, float weightKg)
         {
-            if (heightM > DangerHeight || boxCount >= DangerBoxCount || weightKg > DangerWeight)
+            if (heightM >= dangerHeightM || boxCount >= dangerBoxCount || weightKg >= dangerWeightKg)
                 return DangerLevel.Danger;
 
-            if (heightM > SafeHeight || boxCount >= 5 || weightKg > SafeWeight)
+            if (heightM >= warningHeightM || boxCount >= warningBoxCount || weightKg >= warningWeightKg)
                 return DangerLevel.Warning;
 
             return DangerLevel.Safe;
+        }
+
+        private static Dictionary<int, List<DetectionResult>> GroupByClass(List<DetectionResult> detections)
+        {
+            var groups = new Dictionary<int, List<DetectionResult>>();
+            foreach (DetectionResult detection in detections)
+            {
+                if (!groups.TryGetValue(detection.classId, out List<DetectionResult> group))
+                {
+                    group = new List<DetectionResult>();
+                    groups[detection.classId] = group;
+                }
+
+                group.Add(detection);
+            }
+
+            return groups;
+        }
+
+        private BoxSpec ResolveSpec(int classId)
+        {
+            ProductSpecTable.Spec spec = ProductSpecTable.Get(classId);
+            var resolved = new BoxSpec(
+                widthM: spec.WidthM,
+                depthM: spec.LengthM,
+                heightM: spec.HeightM,
+                weightKg: spec.WeightKg);
+
+            if (!preferMeasuredDimensions)
+                return resolved;
+
+            if (!BoxMeasurementStore.TryGet(out BoxMeasurement measured) || measured.ClassId != classId)
+                return resolved;
+
+            return new BoxSpec(
+                widthM: measured.WidthM,
+                depthM: measured.DepthM,
+                heightM: measured.HeightM,
+                weightKg: resolved.WeightKg);
+        }
+
+        private float EstimateStackHeight(Rect normalizedRect, BoxSpec spec)
+        {
+            float fovHeightM = EstimateHeightFromCameraFov(normalizedRect);
+            float aspectHeightM = useProductAspectHeight
+                ? EstimateHeightFromProductAspect(normalizedRect, spec)
+                : 0f;
+
+            float heightM = Mathf.Max(spec.HeightM, Mathf.Max(fovHeightM, aspectHeightM));
+            return Mathf.Clamp(heightM, 0f, maxEstimatedHeightM);
+        }
+
+        private float EstimateHeightFromCameraFov(Rect normalizedRect)
+        {
+            float rectHeight = Mathf.Clamp01(normalizedRect.height);
+            float fovDegrees = Mathf.Clamp(cameraVerticalFovDegrees, 1f, 179f);
+            float fovRad = fovDegrees * Mathf.Deg2Rad;
+            float viewableHeightM = 2f * assumedDistanceM * Mathf.Tan(fovRad * 0.5f);
+            return rectHeight * viewableHeightM;
+        }
+
+        private float EstimateHeightFromProductAspect(Rect normalizedRect, BoxSpec spec)
+        {
+            float rectWidth = Mathf.Clamp01(normalizedRect.width);
+            float rectHeight = Mathf.Clamp01(normalizedRect.height);
+            if (rectWidth <= 0.01f || rectHeight <= 0.01f)
+                return 0f;
+
+            float visibleAspect = rectHeight / rectWidth;
+            float referenceWidthM = Mathf.Max(spec.WidthM, spec.DepthM);
+            if (referenceWidthM <= 0.01f)
+                return 0f;
+
+            return visibleAspect * referenceWidthM * aspectHeightSafetyMultiplier;
+        }
+
+        private static int EstimateBoxCount(int detectedCount, float stackHeightM, BoxSpec spec)
+        {
+            int countFromHeight = spec.HeightM > 0.01f
+                ? Mathf.Max(1, Mathf.RoundToInt(stackHeightM / spec.HeightM))
+                : 1;
+
+            return Mathf.Max(detectedCount, countFromHeight);
+        }
+
+        private static Rect UnionNormalizedRects(List<DetectionResult> detections)
+        {
+            float minX = 1f;
+            float minY = 1f;
+            float maxX = 0f;
+            float maxY = 0f;
+
+            foreach (DetectionResult detection in detections)
+            {
+                Rect rect = ClampNormalizedRect(detection.boundingBox);
+                minX = Mathf.Min(minX, rect.xMin);
+                minY = Mathf.Min(minY, rect.yMin);
+                maxX = Mathf.Max(maxX, rect.xMax);
+                maxY = Mathf.Max(maxY, rect.yMax);
+            }
+
+            if (maxX <= minX || maxY <= minY)
+                return Rect.zero;
+
+            return Rect.MinMaxRect(minX, minY, maxX, maxY);
+        }
+
+        private static Rect ClampNormalizedRect(Rect rect)
+        {
+            float minX = Mathf.Clamp01(Mathf.Min(rect.xMin, rect.xMax));
+            float minY = Mathf.Clamp01(Mathf.Min(rect.yMin, rect.yMax));
+            float maxX = Mathf.Clamp01(Mathf.Max(rect.xMin, rect.xMax));
+            float maxY = Mathf.Clamp01(Mathf.Max(rect.yMin, rect.yMax));
+
+            if (maxX <= minX)
+                maxX = Mathf.Clamp01(minX + Mathf.Abs(rect.width));
+            if (maxY <= minY)
+                maxY = Mathf.Clamp01(minY + Mathf.Abs(rect.height));
+
+            return Rect.MinMaxRect(minX, minY, maxX, maxY);
+        }
+
+        private static string FormatRect(Rect rect)
+            => $"({rect.x:F2},{rect.y:F2},{rect.width:F2},{rect.height:F2})";
+
+        private readonly struct BoxSpec
+        {
+            public readonly float WidthM;
+            public readonly float DepthM;
+            public readonly float HeightM;
+            public readonly float WeightKg;
+
+            public BoxSpec(float widthM, float depthM, float heightM, float weightKg)
+            {
+                WidthM = Mathf.Max(0f, widthM);
+                DepthM = Mathf.Max(0f, depthM);
+                HeightM = Mathf.Max(0f, heightM);
+                WeightKg = Mathf.Max(0f, weightKg);
+            }
         }
     }
 }
