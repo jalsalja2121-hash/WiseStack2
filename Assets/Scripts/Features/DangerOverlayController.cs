@@ -1,183 +1,315 @@
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
+using ARLogistics.DangerScene;
+using ARLogistics.Data;
 using ARLogistics.Detection;
 using ARLogistics.Managers;
+using UnityEngine;
+using UnityEngine.UI;
 
 namespace ARLogistics.Features
 {
-    /// <summary>
-    /// YOLO 탐지 박스 위에 위험도별 색상 오버레이를 표시합니다.
-    /// 초록: 안전, 노랑: 불안정/파손주의, 빨강: 붕괴 위험
-    /// </summary>
     public class DangerOverlayController : MonoBehaviour
     {
         [Header("UI References")]
         [SerializeField] private RectTransform overlayContainer;
-        [SerializeField] private Text          statusText;
+        [SerializeField] private Text statusText;
 
         [Header("Risk Colors")]
-        [SerializeField] private Color safeColor    = new Color(0.10f, 0.90f, 0.20f, 0.45f);
+        [SerializeField] private Color safeColor = new Color(0.10f, 0.90f, 0.20f, 0.45f);
         [SerializeField] private Color warningColor = new Color(1.00f, 0.82f, 0.00f, 0.55f);
-        [SerializeField] private Color dangerColor  = new Color(1.00f, 0.15f, 0.10f, 0.55f);
+        [SerializeField] private Color dangerColor = new Color(1.00f, 0.15f, 0.10f, 0.55f);
+
+        [Header("Risk Analysis")]
+        [SerializeField] private BoxStackAnalyzer stackAnalyzer;
 
         [Header("Throttle")]
         [SerializeField] private float updateInterval = 0.4f;
 
-        private YoloDetector    _yolo;
-        private WarehouseReport _lastReport;
-        private float           _nextUpdate;
         private readonly List<GameObject> _overlays = new();
+        private YoloDetector _yolo;
+        private WarehouseManager _warehouseManager;
+        private WarehouseReport _lastReport;
+        private float _nextUpdate;
 
-        // ─────────────────────────────────────────────
-        private void Start()
+        private void Awake()
         {
-            _yolo = FindFirstObjectByType<YoloDetector>();
-            if (WarehouseManager.Instance != null)
-            {
-                WarehouseManager.Instance.OnReportReady      += r => _lastReport = r;
-                WarehouseManager.Instance.OnFinalReportReady += OnFinalReport;
-            }
-            SetStatus("📷 박스를 카메라에 비추면 위험 구간을 색상으로 표시합니다");
+            ResolveReferences();
         }
 
-        private void OnFinalReport(WarehouseReport r)
+        private void Start()
         {
-            _lastReport = r;
-            if (statusText != null && !string.IsNullOrEmpty(r.geminiGuidance))
-            {
-                string g = r.geminiGuidance;
-                if (g.Length > 220) g = g.Substring(0, 220) + "...";
-                statusText.text = "🤖 " + g;
-            }
+            ResolveReferences();
+            SubscribeWarehouseManager();
+            SetStatus("박스를 카메라에 비추면 위험 구간을 색상으로 표시합니다.");
         }
 
         private void OnEnable()
         {
-            if (_yolo != null) _yolo.OnDetectionResultsUpdated += HandleDetections;
+            ResolveReferences();
+            if (_yolo != null)
+                _yolo.OnDetectionResultsUpdated += HandleDetections;
         }
 
         private void OnDisable()
         {
-            if (_yolo != null) _yolo.OnDetectionResultsUpdated -= HandleDetections;
+            if (_yolo != null)
+                _yolo.OnDetectionResultsUpdated -= HandleDetections;
+
             ClearOverlays();
         }
 
-        // ─────────────────────────────────────────────
+        private void OnDestroy()
+        {
+            if (_warehouseManager == null)
+                return;
+
+            _warehouseManager.OnReportReady -= HandleReportReady;
+            _warehouseManager.OnFinalReportReady -= OnFinalReport;
+        }
+
+        private void ResolveReferences()
+        {
+            if (_yolo == null)
+                _yolo = FindFirstObjectByType<YoloDetector>();
+            if (stackAnalyzer == null)
+                stackAnalyzer = FindFirstObjectByType<BoxStackAnalyzer>();
+            if (overlayContainer == null)
+                overlayContainer = GameObject.Find("OverlayContainer")?.GetComponent<RectTransform>();
+            if (statusText == null)
+                statusText = GameObject.Find("DO_StatusText")?.GetComponent<Text>();
+        }
+
+        private void SubscribeWarehouseManager()
+        {
+            if (_warehouseManager != null || WarehouseManager.Instance == null)
+                return;
+
+            _warehouseManager = WarehouseManager.Instance;
+            _warehouseManager.OnReportReady += HandleReportReady;
+            _warehouseManager.OnFinalReportReady += OnFinalReport;
+        }
+
+        private void HandleReportReady(WarehouseReport report)
+        {
+            _lastReport = report;
+        }
+
+        private void OnFinalReport(WarehouseReport report)
+        {
+            _lastReport = report;
+            if (statusText == null || string.IsNullOrEmpty(report.geminiGuidance))
+                return;
+
+            string guidance = report.geminiGuidance;
+            if (guidance.Length > 220)
+                guidance = guidance.Substring(0, 220) + "...";
+
+            statusText.text = "AI: " + guidance;
+        }
+
         private void HandleDetections(List<DetectionResult> detections)
         {
-            if (Time.time < _nextUpdate) return;
+            if (Time.time < _nextUpdate)
+                return;
+
             _nextUpdate = Time.time + updateInterval;
-
             ClearOverlays();
-            if (detections == null || overlayContainer == null) return;
 
-            // 클래스별 최고 신뢰도만 추출
-            var best = new Dictionary<int, DetectionResult>();
-            foreach (var d in detections)
-                if (!best.TryGetValue(d.classId, out var ex) || d.confidence > ex.confidence)
-                    best[d.classId] = d;
+            if (detections == null || detections.Count == 0 || overlayContainer == null)
+            {
+                SetStatus("박스를 카메라에 비추면 위험 구간을 색상으로 표시합니다.");
+                return;
+            }
 
-            foreach (var kv in best)
-                SpawnOverlay(kv.Value);
+            Dictionary<int, List<DetectionResult>> groups = GroupByClass(detections);
+            foreach (List<DetectionResult> group in groups.Values)
+                SpawnOverlay(BuildUnionDetection(group), group);
 
-            SetStatus(best.Count == 0
-                ? "📷 박스를 카메라에 비추면 위험 구간을 색상으로 표시합니다"
-                : $"📦 {best.Count}종 분석 완료");
+            SetStatus($"{groups.Count}종 분석 완료");
         }
 
-        private void SpawnOverlay(DetectionResult det)
+        private void SpawnOverlay(DetectionResult displayDetection, List<DetectionResult> group)
         {
-            var (riskLabel, color) = EvaluateRisk(det.classId);
+            var (riskLabel, color) = EvaluateRisk(displayDetection.classId, group);
 
-            float cW = overlayContainer.rect.width;
-            float cH = overlayContainer.rect.height;
+            float canvasWidth = overlayContainer.rect.width;
+            float canvasHeight = overlayContainer.rect.height;
+            Rect bbox = displayDetection.boundingBox;
 
-            // YOLO bbox: y=0은 상단. Canvas: y=0은 하단 → 반전
-            float bLeft   = det.boundingBox.x * cW;
-            float bBottom = (1f - det.boundingBox.y - det.boundingBox.height) * cH;
-            float bWidth  = det.boundingBox.width  * cW;
-            float bHeight = det.boundingBox.height * cH;
+            float left = bbox.x * canvasWidth;
+            float bottom = (1f - bbox.y - bbox.height) * canvasHeight;
+            float width = bbox.width * canvasWidth;
+            float height = bbox.height * canvasHeight;
 
-            // ── 배경 박스 ──────────────────────────────
-            var panel     = new GameObject($"Ovr_{det.className}");
+            var panel = new GameObject($"Ovr_{displayDetection.className}");
             panel.transform.SetParent(overlayContainer, false);
-            var pRect     = panel.AddComponent<RectTransform>();
-            var pImg      = panel.AddComponent<Image>();
-            pImg.color    = color;
-            pRect.anchorMin = Vector2.zero;
-            pRect.anchorMax = Vector2.zero;
-            pRect.pivot     = new Vector2(0.5f, 0.5f);
-            pRect.anchoredPosition = new Vector2(bLeft + bWidth * 0.5f, bBottom + bHeight * 0.5f);
-            pRect.sizeDelta        = new Vector2(bWidth, bHeight);
 
-            // ── 라벨 ───────────────────────────────────
-            string displayName = det.className;
+            var panelRect = panel.AddComponent<RectTransform>();
+            var panelImage = panel.AddComponent<Image>();
+            panelImage.color = color;
+            panelRect.anchorMin = Vector2.zero;
+            panelRect.anchorMax = Vector2.zero;
+            panelRect.pivot = new Vector2(0.5f, 0.5f);
+            panelRect.anchoredPosition = new Vector2(left + width * 0.5f, bottom + height * 0.5f);
+            panelRect.sizeDelta = new Vector2(width, height);
+
+            string displayName = displayDetection.className;
             if (displayName.Length > 3 && displayName[2] == '_')
                 displayName = displayName.Substring(3);
 
-            var lblGO   = new GameObject("Lbl");
-            lblGO.transform.SetParent(panel.transform, false);
-            var lRect   = lblGO.AddComponent<RectTransform>();
-            lRect.anchorMin = new Vector2(0f, 1f);
-            lRect.anchorMax = new Vector2(1f, 1f);
-            lRect.pivot     = new Vector2(0.5f, 0f);
-            lRect.sizeDelta        = new Vector2(0f, 50f);
-            lRect.anchoredPosition = Vector2.zero;
+            var labelObject = new GameObject("Lbl");
+            labelObject.transform.SetParent(panel.transform, false);
 
-            var txt      = lblGO.AddComponent<Text>();
-            txt.text      = $"{riskLabel}\n{displayName}";
-            txt.font      = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            txt.fontSize  = 20;
-            txt.fontStyle = FontStyle.Bold;
-            txt.color     = Color.white;
-            txt.alignment = TextAnchor.MiddleCenter;
+            var labelRect = labelObject.AddComponent<RectTransform>();
+            labelRect.anchorMin = new Vector2(0f, 1f);
+            labelRect.anchorMax = new Vector2(1f, 1f);
+            labelRect.pivot = new Vector2(0.5f, 0f);
+            labelRect.sizeDelta = new Vector2(0f, 50f);
+            labelRect.anchoredPosition = Vector2.zero;
 
-            var shadow    = lblGO.AddComponent<Shadow>();
+            var text = labelObject.AddComponent<Text>();
+            text.text = $"{riskLabel}\n{displayName}";
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.fontSize = 20;
+            text.fontStyle = FontStyle.Bold;
+            text.color = Color.white;
+            text.alignment = TextAnchor.MiddleCenter;
+
+            var shadow = labelObject.AddComponent<Shadow>();
             shadow.effectColor = Color.black;
 
             _overlays.Add(panel);
         }
 
-        private (string label, Color color) EvaluateRisk(int classId)
+        private (string label, Color color) EvaluateRisk(int classId, List<DetectionResult> detections)
         {
             if (_lastReport != null)
             {
-                var p = _lastReport.products.Find(x => x.classId == classId);
-                if (p != null)
-                {
-                    float hRatio = p.stackHeightM / 2.5f;
-                    if (hRatio > 0.88f || p.totalWeightKg > 850f)
-                        return ("🔴 붕괴 위험", dangerColor);
-                    if (hRatio > 0.65f || p.totalWeightKg > 500f)
-                        return ("🟡 불안정",    warningColor);
-                    return ("🟢 안전", safeColor);
-                }
+                ProductCapacity product = _lastReport.products.Find(x => x.classId == classId);
+                if (product != null)
+                    return EvaluateReportRisk(product);
             }
 
-            var spec = ARLogistics.Data.ProductSpecTable.Get(classId);
-            if (spec.IsFragile) return ("🟡 파손주의", warningColor);
-            return ("🟢 안전", safeColor);
+            if (stackAnalyzer != null)
+            {
+                DangerLevel level = stackAnalyzer.Analyze(
+                    detections,
+                    out _,
+                    out float estimatedHeightM,
+                    out _);
+                return ToOverlayRisk(level, estimatedHeightM);
+            }
+
+            ProductSpecTable.Spec spec = ProductSpecTable.Get(classId);
+            return spec.IsFragile
+                ? ("주의 파손", warningColor)
+                : ("안전", safeColor);
+        }
+
+        private (string label, Color color) EvaluateReportRisk(ProductCapacity product)
+        {
+            float heightRatio = product.stackHeightM / 2.5f;
+            if (heightRatio > 0.88f || product.totalWeightKg > 850f)
+                return ($"위험 {product.stackHeightM:F1}m", dangerColor);
+            if (heightRatio > 0.65f || product.totalWeightKg > 500f)
+                return ($"주의 {product.stackHeightM:F1}m", warningColor);
+            return ($"안전 {product.stackHeightM:F1}m", safeColor);
+        }
+
+        private (string label, Color color) ToOverlayRisk(DangerLevel level, float heightM)
+        {
+            return level switch
+            {
+                DangerLevel.Danger => ($"위험 {heightM:F1}m", dangerColor),
+                DangerLevel.Warning => ($"주의 {heightM:F1}m", warningColor),
+                _ => ($"안전 {heightM:F1}m", safeColor)
+            };
         }
 
         private void ClearOverlays()
         {
-            foreach (var go in _overlays)
-                if (go != null) Destroy(go);
+            foreach (GameObject overlay in _overlays)
+            {
+                if (overlay != null)
+                    Destroy(overlay);
+            }
+
             _overlays.Clear();
         }
 
-        private void SetStatus(string msg)
+        private void SetStatus(string message)
         {
-            if (statusText != null) statusText.text = msg;
+            if (statusText != null)
+                statusText.text = message;
         }
-    
 
-private void Awake()
+        private static Dictionary<int, List<DetectionResult>> GroupByClass(List<DetectionResult> detections)
         {
-            _yolo = FindFirstObjectByType<YoloDetector>();
-            if (overlayContainer == null) overlayContainer = GameObject.Find("OverlayContainer")?.GetComponent<RectTransform>();
-            if (statusText == null)       statusText       = GameObject.Find("DO_StatusText")?.GetComponent<UnityEngine.UI.Text>();
+            var groups = new Dictionary<int, List<DetectionResult>>();
+            foreach (DetectionResult detection in detections)
+            {
+                if (!groups.TryGetValue(detection.classId, out List<DetectionResult> group))
+                {
+                    group = new List<DetectionResult>();
+                    groups[detection.classId] = group;
+                }
+
+                group.Add(detection);
+            }
+
+            return groups;
         }
-}
+
+        private static DetectionResult BuildUnionDetection(List<DetectionResult> detections)
+        {
+            DetectionResult best = detections[0];
+            for (int i = 1; i < detections.Count; i++)
+            {
+                if (detections[i].confidence > best.confidence)
+                    best = detections[i];
+            }
+
+            return new DetectionResult(
+                UnionNormalizedRects(detections),
+                best.classId,
+                best.confidence,
+                best.className);
+        }
+
+        private static Rect UnionNormalizedRects(List<DetectionResult> detections)
+        {
+            float minX = 1f;
+            float minY = 1f;
+            float maxX = 0f;
+            float maxY = 0f;
+
+            foreach (DetectionResult detection in detections)
+            {
+                Rect rect = ClampNormalizedRect(detection.boundingBox);
+                minX = Mathf.Min(minX, rect.xMin);
+                minY = Mathf.Min(minY, rect.yMin);
+                maxX = Mathf.Max(maxX, rect.xMax);
+                maxY = Mathf.Max(maxY, rect.yMax);
+            }
+
+            return maxX > minX && maxY > minY
+                ? Rect.MinMaxRect(minX, minY, maxX, maxY)
+                : Rect.zero;
+        }
+
+        private static Rect ClampNormalizedRect(Rect rect)
+        {
+            float minX = Mathf.Clamp01(Mathf.Min(rect.xMin, rect.xMax));
+            float minY = Mathf.Clamp01(Mathf.Min(rect.yMin, rect.yMax));
+            float maxX = Mathf.Clamp01(Mathf.Max(rect.xMin, rect.xMax));
+            float maxY = Mathf.Clamp01(Mathf.Max(rect.yMin, rect.yMax));
+
+            if (maxX <= minX)
+                maxX = Mathf.Clamp01(minX + Mathf.Abs(rect.width));
+            if (maxY <= minY)
+                maxY = Mathf.Clamp01(minY + Mathf.Abs(rect.height));
+
+            return Rect.MinMaxRect(minX, minY, maxX, maxY);
+        }
+    }
 }

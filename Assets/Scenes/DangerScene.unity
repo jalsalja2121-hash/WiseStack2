@@ -135,7 +135,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &115406658
 Transform:
   m_ObjectHideFlags: 0
@@ -413,6 +413,7 @@ MonoBehaviour:
   safeColor: {r: 0.1, g: 0.9, b: 0.2, a: 0.45}
   warningColor: {r: 1, g: 0.82, b: 0, a: 0.55}
   dangerColor: {r: 1, g: 0.15, b: 0.1, a: 0.55}
+  stackAnalyzer: {fileID: 1920098614}
   updateInterval: 0.4
 --- !u!114 &289019251
 MonoBehaviour:
@@ -700,7 +701,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 462015c03f74a7c46b8467e45f00285f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Detection.CameraFrameProvider
-  yoloDetector: {fileID: 0}
+  yoloDetector: {fileID: 2086326709}
   inferenceInterval: 0.5
   inputSize: 640
 --- !u!114 &550693460
@@ -1904,8 +1905,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6a73f31a0d099d84fae71ed14363a4c1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.DangerScene.BoxStackAnalyzer
+  warningHeightM: 1.2
+  dangerHeightM: 2
+  warningBoxCount: 5
+  dangerBoxCount: 8
+  warningWeightKg: 25
+  dangerWeightKg: 40
   cameraVerticalFovDegrees: 60
   assumedDistanceM: 2
+  useProductAspectHeight: 1
+  aspectHeightSafetyMultiplier: 1.1
+  preferMeasuredDimensions: 1
+  maxEstimatedHeightM: 6
+  logAnalysisDetails: 0
 --- !u!4 &1920098615
 Transform:
   m_ObjectHideFlags: 0
@@ -1953,8 +1965,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4b26f3093b8be4a429213e63329abe97, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.AR.ARDetectionBridge
-  yoloDetector: {fileID: 0}
-  arCamera: {fileID: 0}
+  yoloDetector: {fileID: 2086326709}
+  arCamera: {fileID: 550693463}
   raycastLayers: 3
   deduplicateRadius: 0.15
   processInterval: 0.3
