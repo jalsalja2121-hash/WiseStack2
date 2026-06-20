@@ -8,25 +8,34 @@ namespace ARLogistics.Navigation
     {
         private void Awake()
         {
-            WireToHome("BackBtn");
-            WireToHome("BackToHomeBtn");
-            WireToHome("HomeBtn");
-            Wire("DangerOverlayBtn", GoToDanger);
-            Wire("MeasurementBtn",   GoToMeasure);
-            Wire("ARMainBtn",        GoToARMain);
-            Wire("StackPreviewBtn",  GoToARMain);
+            var navBar = GameObject.Find("NavBar");
+            if (navBar == null)
+            {
+                Debug.LogError($"[{nameof(SceneNavigator)}] NavBar was not found in scene '{gameObject.scene.name}'.", this);
+                return;
+            }
+
+            Wire(navBar, "HomeBtn",          GoToHome);
+            Wire(navBar, "StackPreviewBtn",  GoToARMain);
+            Wire(navBar, "DangerOverlayBtn", GoToDanger);
+            Wire(navBar, "MeasurementBtn",   GoToMeasure);
         }
 
-        private void WireToHome(string goName) => Wire(goName, GoToHome);
-
-        private void Wire(string goName, UnityEngine.Events.UnityAction action)
+        private static void Wire(
+            GameObject navBar,
+            string buttonName,
+            UnityEngine.Events.UnityAction action)
         {
-            var go = GameObject.Find(goName);
-            if (go == null) return;
-            var btn = go.GetComponent<Button>();
-            if (btn == null) return;
-            btn.onClick.RemoveAllListeners();
-            btn.onClick.AddListener(action);
+            foreach (var button in navBar.GetComponentsInChildren<Button>(true))
+            {
+                if (button.name != buttonName) continue;
+
+                button.onClick.RemoveAllListeners();
+                button.onClick.AddListener(action);
+                return;
+            }
+
+            Debug.LogError($"[{nameof(SceneNavigator)}] Button '{buttonName}' was not found under NavBar.", navBar);
         }
 
         public void GoToHome()    => SceneManager.LoadScene("HomeScene");

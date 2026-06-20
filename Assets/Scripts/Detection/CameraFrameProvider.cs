@@ -39,6 +39,16 @@ namespace ARLogistics.Detection
         private Texture2D       _reuseTexture;   // GC 절약용 재사용 텍스처
         private float           _lastInferTime;
         private bool            _isProcessing;
+        private bool            _inferenceEnabled = true;
+
+        public bool IsInferenceEnabled => _inferenceEnabled;
+
+        public void SetInferenceEnabled(bool enabled)
+        {
+            _inferenceEnabled = enabled;
+            if (enabled)
+                _lastInferTime = 0f;
+        }
 
         // ─────────────────────────────────────────────
         // 생명주기
@@ -79,6 +89,8 @@ namespace ARLogistics.Detection
 
         private void OnCameraFrameReceived(ARCameraFrameEventArgs args)
         {
+            if (!_inferenceEnabled) return;
+
             // 처리 주기 제한
             if (Time.time - _lastInferTime < inferenceInterval) return;
             if (_isProcessing) return;
