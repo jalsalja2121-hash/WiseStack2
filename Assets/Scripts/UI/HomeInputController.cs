@@ -30,10 +30,12 @@ namespace ARLogistics.UI
             WireInputField(palletLengthInput);
             WireInputField(palletMaxLoadInput);
 
-            // Wire navigation buttons
-            WireButton("ARMainBtn",  GoToARMain);
-            WireButton("DangerBtn",  GoToDanger);
-            WireButton("MeasureBtn", GoToMeasure);
+            // Wire the shared bottom navigation bar. The old HomeScene-only
+            // NavButtonPanel has been removed, so navigation uses the same
+            // button names as every other scene.
+            WireButton("StackPreviewBtn",  GoToARMain);
+            WireButton("DangerOverlayBtn", GoToDanger);
+            WireButton("MeasurementBtn",   GoToMeasure);
         }
 
         private static void WireButton(string goName, UnityEngine.Events.UnityAction action)

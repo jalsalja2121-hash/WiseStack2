@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using ARLogistics.Data;
 using ARLogistics.Detection;
+using ARLogistics.UI;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
@@ -48,8 +49,11 @@ namespace ARLogistics.Features
 
         private readonly List<DetectionResult> _lastDetections = new();
         private YoloDetector _yolo;
+        private CameraFrameProvider _frameProvider;
+        private YoloBoundingBoxOverlay _boundingBoxOverlay;
         private float _nextDetectionTime;
         private bool _analyzing;
+        private bool _analysisComplete;
 
         private string _savedMeasurementSummary = "";
         private string _analysisSummary = "";
@@ -61,6 +65,8 @@ namespace ARLogistics.Features
             analyzeButton ??= GameObject.Find("MS_MeasureBtn")?.GetComponent<Button>();
             clearButton ??= GameObject.Find("MS_ClearBtn")?.GetComponent<Button>();
             _yolo = FindFirstObjectByType<YoloDetector>();
+            _frameProvider = FindFirstObjectByType<CameraFrameProvider>();
+            _boundingBoxOverlay = FindFirstObjectByType<YoloBoundingBoxOverlay>();
         }
 
         private void Start()
@@ -101,6 +107,9 @@ namespace ARLogistics.Features
 
         private void HandleDetections(List<DetectionResult> detections)
         {
+            if (_analyzing || _analysisComplete)
+                return;
+
             if (Time.time < _nextDetectionTime)
                 return;
 
@@ -146,7 +155,11 @@ namespace ARLogistics.Features
             }
 
             if (!_analyzing)
+            {
+                _analysisComplete = true;
+                SetDetectionEnabled(false);
                 StartCoroutine(AnalysisCoroutine());
+            }
         }
 
         private IEnumerator AnalysisCoroutine()
@@ -228,7 +241,7 @@ namespace ARLogistics.Features
 
             _analyzing = false;
             if (analyzeButton != null)
-                analyzeButton.interactable = _lastDetections.Count > 0;
+                analyzeButton.interactable = false;
         }
 
         private IEnumerator CallGemini(
@@ -269,17 +282,31 @@ namespace ARLogistics.Features
 
         private void ClearAll()
         {
+            StopAllCoroutines();
             _lastDetections.Clear();
 
             _savedMeasurementSummary = "";
             _analysisSummary = "";
             _analyzing = false;
+            _analysisComplete = false;
+            _nextDetectionTime = 0f;
+
+            SetDetectionEnabled(true);
+            _boundingBoxOverlay?.ClearBoxes();
 
             if (analyzeButton != null)
                 analyzeButton.interactable = false;
 
             SetClassification("분류 결과\n카메라로 화물을 비춰주세요");
             SetAnalysis("분석 결과\n화물을 인식한 뒤 '분류하기'를 누르세요");
+        }
+
+        private void SetDetectionEnabled(bool enabled)
+        {
+            if (_frameProvider == null)
+                _frameProvider = FindFirstObjectByType<CameraFrameProvider>();
+
+            _frameProvider?.SetInferenceEnabled(enabled);
         }
 
         private void PositionActionBarAboveNavigation()
