@@ -1,8 +1,10 @@
+using System.Collections;
 using System.Collections.Generic;
 using ARLogistics.Data;
 using ARLogistics.Detection;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Rendering;
 using UnityEngine.UI;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
@@ -16,12 +18,13 @@ namespace ARLogistics.Features
     /// <summary>ARMain-only virtual pallet placement and stacking preview.</summary>
     public sealed class ARMainPalletStackPreview : MonoBehaviour
     {
+        private const int MaxPreviewObjects = 512;
         private const string PlacementMessage = "바닥을 터치하여 팔레트를 배치하세요";
-        private const string PalletCreatedMessage = "가상 팔레트 생성 완료";
+        private const string PalletCreatedMessage = "가상 팔레트 생성 완료\n'적재 미리보기'를 누르면 상자가 표시됩니다";
 
         [Header("ARMain References")]
-        [SerializeField] private YoloDetector yoloDetector;
         [SerializeField] private ARRaycastManager raycastManager;
+        [SerializeField] private ARPlaneManager planeManager;
         [SerializeField] private Camera arCamera;
         [Header("Prefabs")]
         [SerializeField] private GameObject palletPrefab;
@@ -30,18 +33,17 @@ namespace ARLogistics.Features
         [SerializeField] private Text statusText;
         [SerializeField] private Button placeButton;
         [SerializeField] private Button resetButton;
+        [SerializeField, Range(4, 64)] private int boxesPerFrame = 24;
         [Header("Pallet Size (m)")]
         [SerializeField, Min(0.1f)] private float palletWidth = 1.1f;
         [SerializeField, Min(0.1f)] private float palletLength = 1.1f;
         [SerializeField, Min(0.01f)] private float palletHeight = 0.15f;
-        [Header("Detection")]
-        [SerializeField, Range(0f, 1f)] private float minimumConfidence = 0.45f;
         [Header("Stack Rules")]
         [SerializeField, Min(0.1f)] private float recommendedStackHeight = 1.8f;
         [SerializeField, Min(0.1f)] private float previewHeight = 2.1f;
         [SerializeField, Range(0f, 0.05f)] private float boxGap = 0.01f;
-        [SerializeField] private Color safeColor = new(0.1f, 0.9f, 0.25f, 0.5f);
-        [SerializeField] private Color overHeightColor = new(1f, 0.15f, 0.1f, 0.55f);
+        [SerializeField] private Color safeColor = new(0.1f, 0.9f, 0.25f, 0.85f);
+        [SerializeField] private Color overHeightColor = new(1f, 0.15f, 0.1f, 0.9f);
 
         public GameObject PalletAnchor => palletAnchor;
         public Transform PalletTransform => palletTransform;
@@ -49,21 +51,35 @@ namespace ARLogistics.Features
         public float RemainingSpacePercent { get; private set; }
 
         private readonly List<ARRaycastHit> raycastHits = new();
-        private readonly List<GameObject> spawnedBoxes = new();
+        private readonly List<GameObject> boxPool = new(MaxPreviewObjects);
+        private readonly List<Renderer[]> boxPoolRenderers = new(MaxPreviewObjects);
+        private readonly List<GameObject> activeBoxes = new(MaxPreviewObjects);
         private GameObject palletAnchor;
         private Transform palletTransform;
+        private GameObject boxPoolRoot;
+        private CameraFrameProvider cameraFrameProvider;
+        private MaterialPropertyBlock safeColorBlock;
+        private MaterialPropertyBlock overHeightColorBlock;
+        private Coroutine spawnBoxesRoutine;
 
         private BoxMeasurement currentMeasurement;
         private bool hasMeasurement;
-        private DetectionResult? latestProductDetection;
         private bool placementEnabled = true;
+        private bool restoreInferenceOnDisable;
         private int lastProcessedTouchFrame = -1;
+        private int displayedBoxCount;
+        private float palletTopHeight;
 
-        private void Awake() => ResolveReferences();
+        private void Awake()
+        {
+            ResolveReferences();
+            InitializeBoxPool();
+        }
 
         private void OnEnable()
         {
-            if (yoloDetector != null) yoloDetector.OnDetectionResultsUpdated += HandleDetections;
+            restoreInferenceOnDisable = cameraFrameProvider != null && cameraFrameProvider.IsInferenceEnabled;
+            cameraFrameProvider?.SetInferenceEnabled(false);
             placeButton?.onClick.AddListener(EnablePlacement);
             resetButton?.onClick.AddListener(ResetSimulation);
             ResetSimulation();
@@ -72,10 +88,16 @@ namespace ARLogistics.Features
 
         private void OnDisable()
         {
-            if (yoloDetector != null) yoloDetector.OnDetectionResultsUpdated -= HandleDetections;
+            if (restoreInferenceOnDisable)
+                cameraFrameProvider?.SetInferenceEnabled(true);
             placeButton?.onClick.RemoveListener(EnablePlacement);
             resetButton?.onClick.RemoveListener(ResetSimulation);
             ClearRuntimeObjects();
+        }
+
+        private void OnDestroy()
+        {
+            if (boxPoolRoot != null) Destroy(boxPoolRoot);
         }
 
         private void Update()
@@ -90,31 +112,21 @@ namespace ARLogistics.Features
 
         private void ResolveReferences()
         {
-            if (yoloDetector == null) yoloDetector = FindFirstObjectByType<YoloDetector>();
             if (raycastManager == null) raycastManager = FindFirstObjectByType<ARRaycastManager>();
+            if (planeManager == null) planeManager = FindFirstObjectByType<ARPlaneManager>();
             if (arCamera == null) arCamera = Camera.main;
+            if (cameraFrameProvider == null) cameraFrameProvider = FindFirstObjectByType<CameraFrameProvider>();
             if (statusText == null) statusText = GameObject.Find("SP_StatusText")?.GetComponent<Text>();
             if (placeButton == null) placeButton = GameObject.Find("SP_PlaceBtn")?.GetComponent<Button>();
 
 
-            if (ARLogistics.AppSettings.PalletWidth > 0.1f)
-                palletWidth = ARLogistics.AppSettings.PalletWidth;
-            if (ARLogistics.AppSettings.PalletLength > 0.1f)
-                palletLength = ARLogistics.AppSettings.PalletLength;
+            palletWidth = ARLogistics.AppSettings.SanitizePalletDimension(
+                ARLogistics.AppSettings.PalletWidth, 1.2f);
+            palletLength = ARLogistics.AppSettings.SanitizePalletDimension(
+                ARLogistics.AppSettings.PalletLength, 1.0f);
+            ARLogistics.AppSettings.PalletWidth = palletWidth;
+            ARLogistics.AppSettings.PalletLength = palletLength;
             if (resetButton == null) resetButton = GameObject.Find("SP_ClearBtn")?.GetComponent<Button>();
-        }
-
-        private void HandleDetections(List<DetectionResult> detections)
-        {
-            DetectionResult? best = null;
-            if (detections != null)
-                foreach (DetectionResult detection in detections)
-                {
-                    if (detection.confidence < minimumConfidence) continue;
-                    if (!best.HasValue || detection.confidence > best.Value.confidence) best = detection;
-                }
-
-            latestProductDetection = best;
         }
 
         public void EnablePlacement()
@@ -135,11 +147,12 @@ namespace ARLogistics.Features
         public void ResetSimulation()
         {
             ClearRuntimeObjects();
-            latestProductDetection = null;
             currentMeasurement = default;
             hasMeasurement = false;
             EstimatedCapacity = 0;
             RemainingSpacePercent = 0f;
+            displayedBoxCount = 0;
+            palletTopHeight = palletHeight;
             placementEnabled = true;
             SetStatus("상자 크기를 먼저 측정해주세요");
         }
@@ -153,11 +166,16 @@ namespace ARLogistics.Features
                 SetStatus("감지된 바닥을 터치해 주세요");
                 return;
             }
-            Pose hitPose = raycastHits[0].pose;
+            if (!TrySelectHorizontalFloorHit(out ARRaycastHit floorHit))
+            {
+                SetStatus("수평으로 감지된 바닥을 터치해 주세요");
+                return;
+            }
+
+            Pose hitPose = floorHit.pose;
             CreatePallet(new Pose(hitPose.position, GetHorizontalFacingRotation(hitPose.rotation)));
             placementEnabled = false;
             SetStatus(PalletCreatedMessage);
-            GenerateStackPreview();
         }
 
         private void CreatePallet(Pose pose)
@@ -183,6 +201,34 @@ namespace ARLogistics.Features
             visual.transform.localScale = new Vector3(palletWidth, palletHeight, palletLength);
             Collider palletCollider = visual.GetComponent<Collider>();
             if (palletCollider != null) Destroy(palletCollider);
+
+            Renderer[] palletRenderers = visual.GetComponentsInChildren<Renderer>();
+            if (TryGetRendererBounds(palletRenderers, out Bounds bounds))
+            {
+                if (bounds.size.y > 0.001f)
+                {
+                    Vector3 scale = visual.transform.localScale;
+                    scale.y *= palletHeight / bounds.size.y;
+                    visual.transform.localScale = scale;
+                    TryGetRendererBounds(palletRenderers, out bounds);
+                }
+
+                float floorOffset = pose.position.y - bounds.min.y;
+                visual.transform.position += Vector3.up * floorOffset;
+                palletTopHeight = bounds.max.y + floorOffset - pose.position.y;
+            }
+            else
+            {
+                palletTopHeight = palletHeight;
+            }
+
+            foreach (Renderer palletRenderer in palletRenderers)
+            {
+                palletRenderer.shadowCastingMode = ShadowCastingMode.Off;
+                palletRenderer.receiveShadows = false;
+                palletRenderer.lightProbeUsage = LightProbeUsage.Off;
+                palletRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            }
         }
 
         private void GenerateStackPreview()
@@ -209,20 +255,35 @@ namespace ARLogistics.Features
                 return;
             }
 
-            SpawnBoxes(product, layout);
-            int perLayer = layout.columns * layout.rows;
-            EstimatedCapacity = perLayer * layout.safeLayers;
-            float usedArea = perLayer * layout.boxWidth * layout.boxLength;
+            long perLayer = (long)layout.columns * layout.rows;
+            long totalPreviewBoxes = perLayer * layout.previewLayers;
+            int visualBoxCount = totalPreviewBoxes > MaxPreviewObjects
+                ? MaxPreviewObjects
+                : (int)totalPreviewBoxes;
+            long estimatedCapacity = perLayer * layout.safeLayers;
+            EstimatedCapacity = estimatedCapacity > int.MaxValue
+                ? int.MaxValue
+                : (int)estimatedCapacity;
+            double usedArea = perLayer * (double)layout.boxWidth * layout.boxLength;
             float palletArea = palletWidth * palletLength;
-            float usagePercent = palletArea > 0f ? Mathf.Clamp01(usedArea / palletArea) * 100f : 0f;
+            float usagePercent = palletArea > 0f
+                ? Mathf.Clamp01((float)(usedArea / palletArea)) * 100f
+                : 0f;
             RemainingSpacePercent = 100f - usagePercent;
 
-            SetStatus(
+            string finalStatus =
                 $"상자 크기 불러오기 완료\n{FormatMeasurement()}\n" +
-                $"예상 적재량: {EstimatedCapacity}개\n" +
+                $"예상 적재량: {estimatedCapacity:N0}개\n" +
                 $"한 층 적재량: {perLayer}개\n" +
                 $"예상 층수: {layout.safeLayers}층\n" +
-                $"바닥 사용률: {usagePercent:F1}% · 남은 공간: {RemainingSpacePercent:F1}%");
+                $"바닥 사용률: {usagePercent:F1}% · 남은 공간: {RemainingSpacePercent:F1}%" +
+                (visualBoxCount < totalPreviewBoxes
+                    ? $"\n미리보기 표시: {visualBoxCount:N0}/{totalPreviewBoxes:N0}개 (성능 최적화)"
+                    : string.Empty);
+
+            SetStatus(finalStatus + "\n박스 에셋 생성 중...");
+            spawnBoxesRoutine = StartCoroutine(
+                SpawnBoxesOverFrames(product, layout, visualBoxCount, finalStatus));
         }
 
         private bool TryCalculateLayout(ProductDimensions product, out StackLayout layout)
@@ -231,7 +292,7 @@ namespace ARLogistics.Features
             int normalRows = Mathf.FloorToInt(palletLength / product.length);
             int rotatedColumns = Mathf.FloorToInt(palletWidth / product.length);
             int rotatedRows = Mathf.FloorToInt(palletLength / product.width);
-            bool rotate = rotatedColumns * rotatedRows > normalColumns * normalRows;
+            bool rotate = (long)rotatedColumns * rotatedRows > (long)normalColumns * normalRows;
             int columns = rotate ? rotatedColumns : normalColumns;
             int rows = rotate ? rotatedRows : normalRows;
             float width = rotate ? product.length : product.width;
@@ -242,40 +303,111 @@ namespace ARLogistics.Features
             return columns > 0 && rows > 0 && previewLayers > 0;
         }
 
-        private void SpawnBoxes(ProductDimensions product, StackLayout layout)
+        private IEnumerator SpawnBoxesOverFrames(
+            ProductDimensions product,
+            StackLayout layout,
+            int visualBoxCount,
+            string finalStatus)
         {
             float startX = -layout.columns * layout.boxWidth * 0.5f + layout.boxWidth * 0.5f;
             float startZ = -layout.rows * layout.boxLength * 0.5f + layout.boxLength * 0.5f;
+            Vector3 scale = new(
+                Mathf.Max(0.01f, layout.boxWidth - boxGap),
+                Mathf.Max(0.01f, product.height - boxGap),
+                Mathf.Max(0.01f, layout.boxLength - boxGap));
+            displayedBoxCount = 0;
+
             for (int layer = 0; layer < layout.previewLayers; layer++)
             {
-                Color color = layer >= layout.safeLayers ? overHeightColor : safeColor;
+                if (displayedBoxCount >= visualBoxCount) break;
+                bool isOverHeight = layer >= layout.safeLayers;
+
                 for (int row = 0; row < layout.rows; row++)
                 for (int column = 0; column < layout.columns; column++)
                 {
-                    GameObject box = boxPreviewPrefab != null ? Instantiate(boxPreviewPrefab, palletTransform) : GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    box.name = $"StackBox_L{layer + 1}_R{row + 1}_C{column + 1}";
-                    if (box.transform.parent != palletTransform) box.transform.SetParent(palletTransform, false);
-                    box.transform.localPosition = new Vector3(startX + column * layout.boxWidth, palletHeight + product.height * (layer + 0.5f), startZ + row * layout.boxLength);
+                    if (displayedBoxCount >= visualBoxCount) break;
+
+                    Vector3 position = new(
+                        startX + column * layout.boxWidth,
+                        palletTopHeight + product.height * (layer + 0.5f),
+                        startZ + row * layout.boxLength);
+
+                    GameObject box = GetPooledBox(displayedBoxCount);
+                    box.transform.SetParent(palletTransform, false);
+                    box.transform.localPosition = position;
                     box.transform.localRotation = Quaternion.identity;
-                    box.transform.localScale = new Vector3(Mathf.Max(0.01f, layout.boxWidth - boxGap), Mathf.Max(0.01f, product.height - boxGap), Mathf.Max(0.01f, layout.boxLength - boxGap));
-                    Collider collider = box.GetComponent<Collider>();
-                    if (collider != null) Destroy(collider);
-                    ApplyPreviewColor(box, color);
-                    spawnedBoxes.Add(box);
+                    box.transform.localScale = scale;
+                    ApplyBoxColor(displayedBoxCount, isOverHeight);
+                    box.SetActive(true);
+                    activeBoxes.Add(box);
+                    displayedBoxCount++;
+
+                    if (displayedBoxCount % boxesPerFrame == 0)
+                        yield return null;
                 }
             }
+
+            spawnBoxesRoutine = null;
+            SetStatus(finalStatus);
         }
 
-        private static void ApplyPreviewColor(GameObject box, Color color)
+        private void InitializeBoxPool()
         {
-            foreach (Renderer targetRenderer in box.GetComponentsInChildren<Renderer>())
+            boxPoolRoot = new GameObject("ARMain_StackPreviewBoxPool");
+            boxPoolRoot.SetActive(false);
+            safeColorBlock = CreateColorBlock(safeColor);
+            overHeightColorBlock = CreateColorBlock(overHeightColor);
+        }
+
+        private static MaterialPropertyBlock CreateColorBlock(Color color)
+        {
+            var block = new MaterialPropertyBlock();
+            block.SetColor("_BaseColor", color);
+            block.SetColor("_Color", color);
+            return block;
+        }
+
+        private GameObject GetPooledBox(int index)
+        {
+            while (boxPool.Count <= index)
             {
-                var block = new MaterialPropertyBlock();
-                targetRenderer.GetPropertyBlock(block);
-                block.SetColor("_BaseColor", color);
-                block.SetColor("_Color", color);
-                targetRenderer.SetPropertyBlock(block);
+                GameObject box;
+                if (boxPreviewPrefab != null)
+                {
+                    box = Instantiate(boxPreviewPrefab, boxPoolRoot.transform);
+                }
+                else
+                {
+                    box = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    box.transform.SetParent(boxPoolRoot.transform, false);
+                }
+
+                box.name = $"StackPreviewBox_{boxPool.Count + 1}";
+                foreach (Collider targetCollider in box.GetComponentsInChildren<Collider>(true))
+                    targetCollider.enabled = false;
+
+                Renderer[] renderers = box.GetComponentsInChildren<Renderer>(true);
+                foreach (Renderer boxRenderer in renderers)
+                {
+                    boxRenderer.shadowCastingMode = ShadowCastingMode.Off;
+                    boxRenderer.receiveShadows = false;
+                    boxRenderer.lightProbeUsage = LightProbeUsage.Off;
+                    boxRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+                }
+
+                box.SetActive(false);
+                boxPool.Add(box);
+                boxPoolRenderers.Add(renderers);
             }
+
+            return boxPool[index];
+        }
+
+        private void ApplyBoxColor(int poolIndex, bool isOverHeight)
+        {
+            MaterialPropertyBlock block = isOverHeight ? overHeightColorBlock : safeColorBlock;
+            foreach (Renderer boxRenderer in boxPoolRenderers[poolIndex])
+                boxRenderer.SetPropertyBlock(block);
         }
 
         private Quaternion GetHorizontalFacingRotation(Quaternion fallback)
@@ -295,8 +427,65 @@ namespace ARLogistics.Features
 
         private void ClearBoxes()
         {
-            foreach (GameObject box in spawnedBoxes) if (box != null) Destroy(box);
-            spawnedBoxes.Clear();
+            if (spawnBoxesRoutine != null)
+            {
+                StopCoroutine(spawnBoxesRoutine);
+                spawnBoxesRoutine = null;
+            }
+
+            foreach (GameObject box in activeBoxes)
+            {
+                if (box == null) continue;
+                box.SetActive(false);
+                if (boxPoolRoot != null)
+                    box.transform.SetParent(boxPoolRoot.transform, false);
+            }
+
+            activeBoxes.Clear();
+            displayedBoxCount = 0;
+        }
+
+        private bool TrySelectHorizontalFloorHit(out ARRaycastHit floorHit)
+        {
+            foreach (ARRaycastHit hit in raycastHits)
+            {
+                ARPlane plane = planeManager != null ? planeManager.GetPlane(hit.trackableId) : null;
+                if (plane != null)
+                {
+                    if (plane.alignment != PlaneAlignment.HorizontalUp) continue;
+                }
+                else if (Vector3.Dot(hit.pose.up, Vector3.up) < 0.9f)
+                {
+                    continue;
+                }
+
+                floorHit = hit;
+                return true;
+            }
+
+            floorHit = default;
+            return false;
+        }
+
+        private static bool TryGetRendererBounds(Renderer[] renderers, out Bounds bounds)
+        {
+            bounds = default;
+            bool found = false;
+            foreach (Renderer targetRenderer in renderers)
+            {
+                if (targetRenderer == null || !targetRenderer.enabled) continue;
+                if (!found)
+                {
+                    bounds = targetRenderer.bounds;
+                    found = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(targetRenderer.bounds);
+                }
+            }
+
+            return found;
         }
 
         private void SetStatus(string message) { if (statusText != null) statusText.text = message; }

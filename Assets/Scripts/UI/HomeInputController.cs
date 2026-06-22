@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using ARLogistics.Navigation;
 
 namespace ARLogistics.UI
 {
@@ -110,7 +111,14 @@ namespace ARLogistics.UI
         public void GoToARMain()
         {
             SaveSettings();
-            SceneManager.LoadScene("ARMain");
+            var navigator = FindFirstObjectByType<SceneNavigator>();
+            if (navigator != null)
+            {
+                navigator.GoToARMain();
+                return;
+            }
+
+            Debug.LogError("[HomeInputController] SceneNavigator를 찾을 수 없어 적재 화면을 열지 않았습니다.", this);
         }
 
         public void GoToDanger()

@@ -39,6 +39,8 @@ namespace ARLogistics.Features
         [SerializeField] private Text resultText;
         [SerializeField] private Button analyzeButton;
         [SerializeField] private Button clearButton;
+        [SerializeField] private GameObject geminiMessagePanel;
+        [SerializeField] private Text geminiMessageText;
 
         [Header("Gemini")]
         [SerializeField] private string geminiApiKey = "";
@@ -64,6 +66,7 @@ namespace ARLogistics.Features
             resultText ??= GameObject.Find("MS_ResultText")?.GetComponent<Text>();
             analyzeButton ??= GameObject.Find("MS_MeasureBtn")?.GetComponent<Button>();
             clearButton ??= GameObject.Find("MS_ClearBtn")?.GetComponent<Button>();
+            EnsureGeminiMessagePanel();
             _yolo = FindFirstObjectByType<YoloDetector>();
             _frameProvider = FindFirstObjectByType<CameraFrameProvider>();
             _boundingBoxOverlay = FindFirstObjectByType<YoloBoundingBoxOverlay>();
@@ -79,6 +82,7 @@ namespace ARLogistics.Features
                 ? "분류 결과\n카메라로 화물을 비춰주세요"
                 : "분류 결과\nYoloDetector를 찾을 수 없습니다");
             SetAnalysis("분석 결과\n화물을 인식한 뒤 '분류하기'를 누르세요");
+            HideGeminiMessage();
         }
 
         private void OnRectTransformDimensionsChange()
@@ -237,7 +241,10 @@ namespace ARLogistics.Features
             if (!string.IsNullOrEmpty(geminiApiKey))
                 yield return CallGemini(geminiLines, warehouseArea, ceilingHeight, palletCount);
             else
+            {
+                HideGeminiMessage();
                 SetAnalysis(_analysisSummary + "\n\n계산 완료");
+            }
 
             _analyzing = false;
             if (analyzeButton != null)
@@ -250,6 +257,8 @@ namespace ARLogistics.Features
             float ceilingHeight,
             int palletCount)
         {
+            ShowGeminiMessage("Gemini가 적재 가이드를 분석하고 있습니다...");
+
             string prompt =
                 $"물류 창고 적재 분석 결과입니다.\n" +
                 $"창고 면적: {warehouseArea}m², 적재 가능 높이: {ceilingHeight}m, 팔레트 배치 수: {palletCount}개\n\n" +
@@ -270,14 +279,16 @@ namespace ARLogistics.Features
 
             if (request.result != UnityWebRequest.Result.Success)
             {
-                SetAnalysis(_analysisSummary + $"\n\nGemini 오류: {request.error}");
+                SetAnalysis(_analysisSummary + "\n\n계산 완료");
+                ShowGeminiMessage($"Gemini 오류\n{request.error}");
                 yield break;
             }
 
             string guidance = ParseGeminiText(request.downloadHandler.text);
-            SetAnalysis(string.IsNullOrEmpty(guidance)
-                ? _analysisSummary + "\n\n분석 완료"
-                : _analysisSummary + "\n\n적재 가이드\n" + guidance);
+            SetAnalysis(_analysisSummary + "\n\n분석 완료");
+            ShowGeminiMessage(string.IsNullOrEmpty(guidance)
+                ? "Gemini가 별도 메시지를 반환하지 않았습니다."
+                : guidance);
         }
 
         private void ClearAll()
@@ -293,6 +304,7 @@ namespace ARLogistics.Features
 
             SetDetectionEnabled(true);
             _boundingBoxOverlay?.ClearBoxes();
+            HideGeminiMessage();
 
             if (analyzeButton != null)
                 analyzeButton.interactable = false;
@@ -307,6 +319,74 @@ namespace ARLogistics.Features
                 _frameProvider = FindFirstObjectByType<CameraFrameProvider>();
 
             _frameProvider?.SetInferenceEnabled(enabled);
+        }
+
+        private void EnsureGeminiMessagePanel()
+        {
+            if (geminiMessagePanel == null)
+                geminiMessagePanel = GameObject.Find("GeminiMessagePanel");
+            if (geminiMessageText == null)
+                geminiMessageText = GameObject.Find("GeminiMessageText")?.GetComponent<Text>();
+
+            if (geminiMessagePanel != null && geminiMessageText != null)
+                return;
+
+            geminiMessagePanel = new GameObject(
+                "GeminiMessagePanel", typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
+            geminiMessagePanel.transform.SetParent(transform, false);
+
+            RectTransform panelRect = geminiMessagePanel.GetComponent<RectTransform>();
+            panelRect.anchorMin = new Vector2(0.06f, 0.28f);
+            panelRect.anchorMax = new Vector2(0.94f, 0.53f);
+            panelRect.offsetMin = Vector2.zero;
+            panelRect.offsetMax = Vector2.zero;
+
+            Image panelImage = geminiMessagePanel.GetComponent<Image>();
+            panelImage.color = new Color(0.03f, 0.07f, 0.16f, 0.82f);
+            panelImage.raycastTarget = false;
+
+            CanvasGroup canvasGroup = geminiMessagePanel.GetComponent<CanvasGroup>();
+            canvasGroup.interactable = false;
+            canvasGroup.blocksRaycasts = false;
+
+            var textObject = new GameObject(
+                "GeminiMessageText", typeof(RectTransform), typeof(Text));
+            textObject.transform.SetParent(geminiMessagePanel.transform, false);
+
+            RectTransform textRect = textObject.GetComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = new Vector2(28f, 22f);
+            textRect.offsetMax = new Vector2(-28f, -22f);
+
+            geminiMessageText = textObject.GetComponent<Text>();
+            geminiMessageText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            geminiMessageText.fontSize = 26;
+            geminiMessageText.color = Color.white;
+            geminiMessageText.alignment = TextAnchor.UpperLeft;
+            geminiMessageText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            geminiMessageText.verticalOverflow = VerticalWrapMode.Truncate;
+            geminiMessageText.raycastTarget = false;
+        }
+
+        private void ShowGeminiMessage(string message)
+        {
+            EnsureGeminiMessagePanel();
+            if (geminiMessageText != null)
+                geminiMessageText.text = "Gemini 분석 메시지\n\n" + message;
+            if (geminiMessagePanel != null)
+            {
+                geminiMessagePanel.SetActive(true);
+                geminiMessagePanel.transform.SetAsLastSibling();
+            }
+        }
+
+        private void HideGeminiMessage()
+        {
+            if (geminiMessageText != null)
+                geminiMessageText.text = "";
+            if (geminiMessagePanel != null)
+                geminiMessagePanel.SetActive(false);
         }
 
         private void PositionActionBarAboveNavigation()

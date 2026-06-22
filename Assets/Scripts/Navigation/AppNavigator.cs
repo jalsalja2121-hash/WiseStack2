@@ -1,3 +1,4 @@
+using ARLogistics.Data;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -72,6 +73,12 @@ private void AutoDiscover()
 
         public void NavigateTo(AppScreen screen)
         {
+            if (screen == AppScreen.StackPreview && !BoxMeasurementStore.TryGet(out _))
+            {
+                FindFirstObjectByType<SceneNavigator>()?.ShowMeasurementRequiredDialog();
+                return;
+            }
+
             CurrentScreen = screen;
             homePanel?.SetActive(screen == AppScreen.Home);
             stackPreviewPanel?.SetActive(screen == AppScreen.StackPreview);
