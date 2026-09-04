@@ -83,6 +83,11 @@ namespace ARLogistics.Managers
                 return;
             }
             Instance = this;
+
+            // DontDestroyOnLoad only accepts root GameObjects. The manager is
+            // nested under the scene's Managers container in current scenes.
+            if (transform.parent != null)
+                transform.SetParent(null, true);
             DontDestroyOnLoad(gameObject);
         }
 

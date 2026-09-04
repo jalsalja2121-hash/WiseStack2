@@ -19,6 +19,11 @@ namespace ARLogistics.Features
     public sealed class ARMainPalletStackPreview : MonoBehaviour
     {
         private const int MaxPreviewObjects = 512;
+        private const int StatusFontSize = 38;
+        private const int ButtonFontSize = 34;
+        private const float MinimumButtonHeight = 112f;
+        private const float StatusPanelHeight = 280f;
+        private const float LayoutButtonHeight = 96f;
         private const string PlacementMessage = "바닥을 터치하여 팔레트를 배치하세요";
         private const string PalletCreatedMessage = "가상 팔레트 생성 완료\n'적재 미리보기'를 누르면 상자가 표시됩니다";
 
@@ -69,10 +74,22 @@ namespace ARLogistics.Features
         private int lastProcessedTouchFrame = -1;
         private int displayedBoxCount;
         private float palletTopHeight;
+        private Image statusBackground;
+        private Button layoutButton;
+        private Text layoutButtonText;
+        private LayoutPreference layoutPreference = LayoutPreference.Auto;
+
+        private enum LayoutPreference
+        {
+            Auto,
+            Normal,
+            Rotated
+        }
 
         private void Awake()
         {
             ResolveReferences();
+            ConfigureFriendlyUI();
             InitializeBoxPool();
         }
 
@@ -82,6 +99,7 @@ namespace ARLogistics.Features
             cameraFrameProvider?.SetInferenceEnabled(false);
             placeButton?.onClick.AddListener(EnablePlacement);
             resetButton?.onClick.AddListener(ResetSimulation);
+            layoutButton?.onClick.AddListener(CycleLayoutPreference);
             ResetSimulation();
             TryLoadMeasurement(true);
         }
@@ -92,6 +110,7 @@ namespace ARLogistics.Features
                 cameraFrameProvider?.SetInferenceEnabled(true);
             placeButton?.onClick.RemoveListener(EnablePlacement);
             resetButton?.onClick.RemoveListener(ResetSimulation);
+            layoutButton?.onClick.RemoveListener(CycleLayoutPreference);
             ClearRuntimeObjects();
         }
 
@@ -174,6 +193,7 @@ namespace ARLogistics.Features
 
             Pose hitPose = floorHit.pose;
             CreatePallet(new Pose(hitPose.position, GetHorizontalFacingRotation(hitPose.rotation)));
+            CreateSafetyHeightGuide();
             placementEnabled = false;
             SetStatus(PalletCreatedMessage);
         }
@@ -272,11 +292,11 @@ namespace ARLogistics.Features
             RemainingSpacePercent = 100f - usagePercent;
 
             string finalStatus =
-                $"상자 크기 불러오기 완료\n{FormatMeasurement()}\n" +
-                $"예상 적재량: {estimatedCapacity:N0}개\n" +
-                $"한 층 적재량: {perLayer}개\n" +
-                $"예상 층수: {layout.safeLayers}층\n" +
-                $"바닥 사용률: {usagePercent:F1}% · 남은 공간: {RemainingSpacePercent:F1}%" +
+                $"<b>{GetLayoutTitle()} · 안전 적재</b>\n" +
+                $"{FormatMeasurement()}\n" +
+                $"{layout.columns} × {layout.rows}개 · 한 층 {perLayer}개 · 총 {estimatedCapacity:N0}개\n" +
+                $"안전 {layout.safeLayers}층 · 높이 {palletHeight + layout.safeLayers * product.height:F2}m\n" +
+                $"공간 활용 {usagePercent:F1}% · 여유 {RemainingSpacePercent:F1}%" +
                 (visualBoxCount < totalPreviewBoxes
                     ? $"\n미리보기 표시: {visualBoxCount:N0}/{totalPreviewBoxes:N0}개 (성능 최적화)"
                     : string.Empty);
@@ -292,7 +312,9 @@ namespace ARLogistics.Features
             int normalRows = Mathf.FloorToInt(palletLength / product.length);
             int rotatedColumns = Mathf.FloorToInt(palletWidth / product.length);
             int rotatedRows = Mathf.FloorToInt(palletLength / product.width);
-            bool rotate = (long)rotatedColumns * rotatedRows > (long)normalColumns * normalRows;
+            bool rotate = layoutPreference == LayoutPreference.Rotated ||
+                          (layoutPreference == LayoutPreference.Auto &&
+                           (long)rotatedColumns * rotatedRows > (long)normalColumns * normalRows);
             int columns = rotate ? rotatedColumns : normalColumns;
             int rows = rotate ? rotatedRows : normalRows;
             float width = rotate ? product.length : product.width;
@@ -322,6 +344,10 @@ namespace ARLogistics.Features
                 if (displayedBoxCount >= visualBoxCount) break;
                 bool isOverHeight = layer >= layout.safeLayers;
 
+                SetStatus(
+                    $"<b>적재 시뮬레이션 생성 중</b>\n" +
+                    $"{layer + 1} / {layout.previewLayers}층 · {displayedBoxCount:N0}개 배치됨");
+
                 for (int row = 0; row < layout.rows; row++)
                 for (int column = 0; column < layout.columns; column++)
                 {
@@ -345,6 +371,9 @@ namespace ARLogistics.Features
                     if (displayedBoxCount % boxesPerFrame == 0)
                         yield return null;
                 }
+
+                // Let the user follow the stacking order one layer at a time.
+                yield return new WaitForSeconds(0.08f);
             }
 
             spawnBoxesRoutine = null;
@@ -488,7 +517,186 @@ namespace ARLogistics.Features
             return found;
         }
 
-        private void SetStatus(string message) { if (statusText != null) statusText.text = message; }
+        private void ConfigureFriendlyUI()
+        {
+            if (statusText != null)
+            {
+                statusText.fontSize = Mathf.Max(statusText.fontSize, StatusFontSize);
+                statusText.fontStyle = FontStyle.Normal;
+                statusText.alignment = TextAnchor.MiddleLeft;
+                statusText.lineSpacing = 1.15f;
+                statusText.raycastTarget = false;
+                statusText.supportRichText = true;
+
+                RectTransform statusRect = statusText.rectTransform;
+                statusRect.offsetMin = new Vector2(32f, 20f);
+                statusRect.offsetMax = new Vector2(-32f, -20f);
+
+                statusBackground = statusText.GetComponentInParent<Image>();
+                if (statusBackground != null)
+                {
+                    statusBackground.color = new Color(0.035f, 0.055f, 0.09f, 0.94f);
+                    RectTransform panelRect = statusBackground.rectTransform;
+                    panelRect.sizeDelta = new Vector2(panelRect.sizeDelta.x, StatusPanelHeight);
+                    panelRect.anchoredPosition = new Vector2(panelRect.anchoredPosition.x, -StatusPanelHeight * 0.5f);
+                }
+            }
+
+            ConfigureActionButton(placeButton, "📦  적재 시작", new Color(0.08f, 0.48f, 0.92f, 1f));
+            ConfigureActionButton(resetButton, "↻  다시 시작", new Color(0.25f, 0.28f, 0.34f, 1f));
+            CreateLayoutButton();
+        }
+
+        private void CreateLayoutButton()
+        {
+            Transform panel = transform;
+            GameObject existing = GameObject.Find("SP_LayoutBtn");
+            if (existing != null)
+            {
+                layoutButton = existing.GetComponent<Button>();
+                layoutButtonText = existing.GetComponentInChildren<Text>(true);
+                UpdateLayoutButtonLabel();
+                return;
+            }
+
+            var buttonObject = new GameObject("SP_LayoutBtn", typeof(RectTransform), typeof(Image), typeof(Button));
+            buttonObject.transform.SetParent(panel, false);
+            RectTransform rect = buttonObject.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.04f, 0f);
+            rect.anchorMax = new Vector2(0.96f, 0f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(0f, 360f);
+            rect.sizeDelta = new Vector2(0f, LayoutButtonHeight);
+
+            Image background = buttonObject.GetComponent<Image>();
+            background.color = new Color(0.10f, 0.16f, 0.27f, 0.98f);
+            layoutButton = buttonObject.GetComponent<Button>();
+            layoutButton.targetGraphic = background;
+
+            var labelObject = new GameObject("Label", typeof(RectTransform), typeof(Text));
+            labelObject.transform.SetParent(buttonObject.transform, false);
+            RectTransform labelRect = labelObject.GetComponent<RectTransform>();
+            labelRect.anchorMin = Vector2.zero;
+            labelRect.anchorMax = Vector2.one;
+            labelRect.offsetMin = new Vector2(20f, 8f);
+            labelRect.offsetMax = new Vector2(-20f, -8f);
+
+            layoutButtonText = labelObject.GetComponent<Text>();
+            layoutButtonText.font = statusText != null && statusText.font != null
+                ? statusText.font
+                : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            layoutButtonText.fontSize = 32;
+            layoutButtonText.fontStyle = FontStyle.Bold;
+            layoutButtonText.alignment = TextAnchor.MiddleCenter;
+            layoutButtonText.color = Color.white;
+            layoutButtonText.raycastTarget = false;
+            UpdateLayoutButtonLabel();
+        }
+
+        private void CycleLayoutPreference()
+        {
+            layoutPreference = layoutPreference switch
+            {
+                LayoutPreference.Auto => LayoutPreference.Normal,
+                LayoutPreference.Normal => LayoutPreference.Rotated,
+                _ => LayoutPreference.Auto
+            };
+            UpdateLayoutButtonLabel();
+
+            if (palletTransform != null)
+                GenerateStackPreview();
+            else if (hasMeasurement)
+                SetStatus($"<b>{GetLayoutTitle()}</b>\n{FormatMeasurement()}\n팔레트를 배치하면 이 방식으로 계산합니다");
+        }
+
+        private void UpdateLayoutButtonLabel()
+        {
+            if (layoutButtonText != null)
+                layoutButtonText.text = $"⇄  배치안: {GetLayoutTitle()}";
+        }
+
+        private string GetLayoutTitle()
+        {
+            return layoutPreference switch
+            {
+                LayoutPreference.Normal => "방향 고정",
+                LayoutPreference.Rotated => "90° 회전",
+                _ => "효율 추천"
+            };
+        }
+
+        private void CreateSafetyHeightGuide()
+        {
+            if (palletTransform == null) return;
+
+            GameObject guideRoot = new("권장 적재 높이 1.8m");
+            guideRoot.transform.SetParent(palletTransform, false);
+            guideRoot.transform.localPosition = Vector3.up * recommendedStackHeight;
+            Color guideColor = new(1f, 0.72f, 0.08f, 0.95f);
+            MaterialPropertyBlock guideBlock = CreateColorBlock(guideColor);
+            const float thickness = 0.018f;
+
+            CreateGuideEdge(guideRoot.transform, new Vector3(0f, 0f, palletLength * 0.5f), new Vector3(palletWidth, thickness, thickness), guideBlock);
+            CreateGuideEdge(guideRoot.transform, new Vector3(0f, 0f, -palletLength * 0.5f), new Vector3(palletWidth, thickness, thickness), guideBlock);
+            CreateGuideEdge(guideRoot.transform, new Vector3(palletWidth * 0.5f, 0f, 0f), new Vector3(thickness, thickness, palletLength), guideBlock);
+            CreateGuideEdge(guideRoot.transform, new Vector3(-palletWidth * 0.5f, 0f, 0f), new Vector3(thickness, thickness, palletLength), guideBlock);
+        }
+
+        private static void CreateGuideEdge(Transform parent, Vector3 position, Vector3 scale, MaterialPropertyBlock block)
+        {
+            GameObject edge = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            edge.name = "SafetyHeightEdge";
+            edge.transform.SetParent(parent, false);
+            edge.transform.localPosition = position;
+            edge.transform.localScale = scale;
+            Collider edgeCollider = edge.GetComponent<Collider>();
+            if (edgeCollider != null) Destroy(edgeCollider);
+            Renderer edgeRenderer = edge.GetComponent<Renderer>();
+            if (edgeRenderer != null)
+            {
+                edgeRenderer.SetPropertyBlock(block);
+                edgeRenderer.shadowCastingMode = ShadowCastingMode.Off;
+                edgeRenderer.receiveShadows = false;
+            }
+        }
+
+        private static void ConfigureActionButton(Button button, string label, Color backgroundColor)
+        {
+            if (button == null) return;
+
+            Image image = button.targetGraphic as Image ?? button.GetComponent<Image>();
+            if (image != null) image.color = backgroundColor;
+
+            RectTransform buttonRect = button.transform as RectTransform;
+            if (buttonRect != null && buttonRect.sizeDelta.y < MinimumButtonHeight)
+                buttonRect.sizeDelta = new Vector2(buttonRect.sizeDelta.x, MinimumButtonHeight);
+
+            Text buttonText = button.GetComponentInChildren<Text>(true);
+            if (buttonText == null) return;
+            buttonText.text = label;
+            buttonText.fontSize = Mathf.Max(buttonText.fontSize, ButtonFontSize);
+            buttonText.fontStyle = FontStyle.Bold;
+            buttonText.alignment = TextAnchor.MiddleCenter;
+            buttonText.raycastTarget = false;
+            buttonText.resizeTextForBestFit = true;
+            buttonText.resizeTextMinSize = 26;
+            buttonText.resizeTextMaxSize = 42;
+        }
+
+        private void SetStatus(string message)
+        {
+            if (statusText == null) return;
+            statusText.text = message;
+
+            if (statusBackground == null) return;
+            bool isDanger = message.Contains("초과") || message.Contains("실패") || message.Contains("오류");
+            bool isComplete = message.Contains("완료") || message.Contains("안전");
+            statusBackground.color = isDanger
+                ? new Color(0.38f, 0.055f, 0.07f, 0.96f)
+                : isComplete
+                    ? new Color(0.035f, 0.22f, 0.14f, 0.96f)
+                    : new Color(0.035f, 0.055f, 0.09f, 0.94f);
+        }
 
         private static bool TryGetPointerDown(out Vector2 position, out int pointerId)
         {
