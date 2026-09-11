@@ -136,7 +136,9 @@
           {
             "name": "Camera",
             "scenes": [
-              "Assets/Scenes/ARMain.unity"
+              "Assets/Scenes/ARMain.unity",
+              "Assets/Scenes/DangerScene.unity",
+              "Assets/Scenes/MeasureScene.unity"
             ],
             "dependencyType": 0,
             "icon": null
@@ -244,7 +246,9 @@
           {
             "name": "Light",
             "scenes": [
-              "Assets/Scenes/ARMain.unity"
+              "Assets/Scenes/ARMain.unity",
+              "Assets/Scenes/DangerScene.unity",
+              "Assets/Scenes/MeasureScene.unity"
             ],
             "dependencyType": 0,
             "icon": null
@@ -303,19 +307,25 @@
           },
           {
             "name": "Mesh",
-            "scenes": [],
+            "scenes": [
+              "Assets/Scenes/ARMain.unity"
+            ],
             "dependencyType": 0,
             "icon": null
           },
           {
             "name": "MeshFilter",
-            "scenes": [],
+            "scenes": [
+              "Assets/Scenes/ARMain.unity"
+            ],
             "dependencyType": 0,
             "icon": null
           },
           {
             "name": "MeshRenderer",
-            "scenes": [],
+            "scenes": [
+              "Assets/Scenes/ARMain.unity"
+            ],
             "dependencyType": 0,
             "icon": null
           },
@@ -1026,12 +1036,6 @@
             "name": "PhysicsManager",
             "scenes": [],
             "dependencyType": 1,
-            "icon": null
-          },
-          {
-            "name": "SphereCollider",
-            "scenes": [],
-            "dependencyType": 0,
             "icon": null
           },
           {
