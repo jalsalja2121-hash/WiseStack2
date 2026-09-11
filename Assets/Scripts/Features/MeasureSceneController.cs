@@ -15,8 +15,7 @@ namespace ARLogistics.Features
     /// </summary>
     public sealed class MeasureSceneController : MonoBehaviour
     {
-        private const float PalletHeightM = 0.15f;
-        private const float HeightSafetyMarginM = 0.3f;
+        private const float PalletHeightM = StackingCalculator.PalletHeight;
         private const int PalletClassId = 10;
 
         private static readonly string[] CargoNames =
@@ -190,7 +189,8 @@ namespace ARLogistics.Features
             if (!string.IsNullOrEmpty(_savedMeasurementSummary))
                 result.AppendLine(_savedMeasurementSummary);
             result.AppendLine("분석 결과");
-            result.AppendLine($"창고 면적 {warehouseArea:F0}m² · 적재 가능 높이 {ceilingHeight:F2}m");
+            result.AppendLine($"창고 면적 {warehouseArea:F0}m² · 창고 높이 {ceilingHeight:F2}m");
+            result.AppendLine("시뮬레이션은 팔레트 포함 1.8m 이내 · 포장 강도·결속 별도 확인");
             result.AppendLine($"팔레트 {palletWidth:F2}m × {palletLength:F2}m · 배치 가능 {palletCount}개");
             result.AppendLine();
 
@@ -200,31 +200,17 @@ namespace ARLogistics.Features
                 GetCargoSpec(detection.classId, out float cargoWidth, out float cargoLength,
                     out float cargoHeight, out float cargoWeight, out bool fragile);
 
-                CalculateHorizontalFit(
-                    palletWidth,
-                    palletLength,
-                    cargoWidth,
-                    cargoLength,
-                    out int acrossWidth,
-                    out int acrossLength);
-
-                int perLayer = acrossWidth * acrossLength;
-                float usableHeight = Mathf.Max(0f, ceilingHeight - PalletHeightM - HeightSafetyMarginM);
-                int layersByHeight = cargoHeight > 0.01f
-                    ? Mathf.Max(0, Mathf.FloorToInt(usableHeight / cargoHeight))
-                    : 0;
-                int layersByWeight = cargoWeight > 0.01f && perLayer > 0
-                    ? Mathf.Max(0, Mathf.FloorToInt(palletMaxLoad / (cargoWeight * perLayer)))
-                    : layersByHeight;
-                int layers = detection.classId == PalletClassId
-                    ? (perLayer > 0 ? 1 : 0)
-                    : Mathf.Min(layersByHeight, layersByWeight);
-                int perPallet = perLayer * layers;
-                int warehouseTotal = perPallet * palletCount;
+                var plan = StackingCalculator.Calculate(cargoWidth, cargoLength, cargoHeight,
+                    cargoWeight, palletWidth, palletLength, ceilingHeight, palletMaxLoad,
+                    isPallet: detection.classId == PalletClassId);
+                int acrossWidth = plan.Columns, acrossLength = plan.Rows;
+                int layers = plan.Layers, perPallet = plan.Total;
+                long warehouseTotal = (long)perPallet * palletCount;
 
                 result.AppendLine($"[{cargoName}{(fragile ? " · 파손주의" : "")}]");
                 result.AppendLine($"화물 크기 {cargoWidth:F2}m × {cargoLength:F2}m × {cargoHeight:F2}m");
-                result.AppendLine($"가로 {acrossWidth}개 × 세로 {acrossLength}개 × {layers}층 = 총 {perPallet}개");
+                result.AppendLine($"한 단에 {plan.PerLayer}개 · 최대 {layers}단 · 총 {perPallet}개");
+                result.AppendLine(plan.Message);
                 result.AppendLine($"창고 전체 적재 가능 수량: {warehouseTotal}개");
                 result.AppendLine();
 
@@ -261,7 +247,9 @@ namespace ARLogistics.Features
 
             string prompt =
                 $"물류 창고 적재 분석 결과입니다.\n" +
-                $"창고 면적: {warehouseArea}m², 적재 가능 높이: {ceilingHeight}m, 팔레트 배치 수: {palletCount}개\n\n" +
+                $"창고 면적: {warehouseArea}m², 창고 높이: {ceilingHeight}m, 팔레트 배치 수: {palletCount}개\n" +
+                "앱 시뮬레이션 상한은 팔레트 포함 1.8m입니다. 천장 아래 30cm 여유와 하중 제한도 적용합니다.\n" +
+                "이 수량은 포장 압축강도와 결속을 검증하지 않은 예상치입니다. 안전을 보장하거나 계산 단수를 초과하도록 권하지 마세요.\n\n" +
                 $"탐지된 화물 및 계산 결과:\n{string.Join("\n", productLines)}\n\n" +
                 "위 적재 조건에서 최적 적재 방법, 주의사항, 안전 팁을 한국어 3문장 이내로 요약해 주세요.";
 
@@ -408,35 +396,6 @@ namespace ARLogistics.Features
             actionBar.sizeDelta = new Vector2(0f, 180f);
             actionBar.SetAsLastSibling();
         }
-
-        private static void CalculateHorizontalFit(
-            float palletWidth,
-            float palletLength,
-            float cargoWidth,
-            float cargoLength,
-            out int acrossWidth,
-            out int acrossLength)
-        {
-            int normalWidth = FitCount(palletWidth, cargoWidth);
-            int normalLength = FitCount(palletLength, cargoLength);
-            int rotatedWidth = FitCount(palletWidth, cargoLength);
-            int rotatedLength = FitCount(palletLength, cargoWidth);
-
-            if (rotatedWidth * rotatedLength > normalWidth * normalLength)
-            {
-                acrossWidth = rotatedWidth;
-                acrossLength = rotatedLength;
-                return;
-            }
-
-            acrossWidth = normalWidth;
-            acrossLength = normalLength;
-        }
-
-        private static int FitCount(float available, float required) =>
-            available > 0f && required > 0.01f
-                ? Mathf.Max(0, Mathf.FloorToInt(available / required))
-                : 0;
 
         private static void GetCargoSpec(
             int classId,

@@ -233,7 +233,7 @@ namespace ARLogistics.UI
             if (reportText  == null) return;
 
             var sb = new StringBuilder();
-            sb.AppendLine($"🏭 창고 {report.warehouseAreaM2}m²  천장 {report.ceilingHeightM}m");
+            sb.AppendLine($"🏭 창고 {report.warehouseAreaM2}m²  창고 높이 {report.ceilingHeightM}m");
             sb.AppendLine($"🪵 팔레트 {report.palletSpec.width}×{report.palletSpec.length}m  최대 {report.palletSpec.maxLoadKg}kg");
             sb.AppendLine();
 
@@ -256,7 +256,7 @@ namespace ARLogistics.UI
             if (reportText  == null) return;
 
             var sb = new StringBuilder();
-            sb.AppendLine($"🏭 창고 {report.warehouseAreaM2}m²  천장 {report.ceilingHeightM}m");
+            sb.AppendLine($"🏭 창고 {report.warehouseAreaM2}m²  창고 높이 {report.ceilingHeightM}m");
             sb.AppendLine();
 
             foreach (var p in report.products)

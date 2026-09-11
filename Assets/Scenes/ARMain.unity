@@ -164,7 +164,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Managers.WarehouseManager
   warehouseAreaM2: 500
-  ceilingHeightM: 6
+  ceilingHeightM: 3
   palletSpec:
     width: 1.2
     length: 1

@@ -189,7 +189,7 @@ namespace ARLogistics.Features
         {
             string prompt =
                 $"물류 창고 적재 분석 결과입니다.\n" +
-                $"창고 면적: {area}m², 천장 높이: {ceiling}m, 팔레트 배치 수: {palletCount}개\n\n" +
+                $"창고 면적: {area}m², 창고 높이: {ceiling}m, 팔레트 배치 수: {palletCount}개\n\n" +
                 $"탐지된 화물 및 계산 결과:\n{string.Join("\n", productLines)}\n\n" +
                 "위 적재 조건에서 최적 적재 방법, 주의사항, 안전 팁을 한국어 3문장 이내로 요약해 주세요.";
 

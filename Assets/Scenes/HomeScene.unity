@@ -2585,7 +2585,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 6.0
+  m_Text: 3.0
 --- !u!222 &986050518
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -3360,7 +3360,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "\uC2A4\uCE35 \uB192\uC774 (m)"
+  m_Text: "\uCC3D\uACE0 \uB192\uC774 (m)"
 --- !u!222 &1797168026
 CanvasRenderer:
   m_ObjectHideFlags: 0
