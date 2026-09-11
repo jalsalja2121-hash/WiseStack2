@@ -9,7 +9,7 @@ namespace ARLogistics
         private static float palletLength = 1.0f;
 
         public static float WarehouseAreaM2 = 500f;
-        public static float CeilingHeightM  = 6f;
+        public static float CeilingHeightM  = 3f;
         public static float PalletWidth
         {
             get => palletWidth;

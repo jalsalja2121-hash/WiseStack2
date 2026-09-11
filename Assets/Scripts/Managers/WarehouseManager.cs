@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using ARLogistics.AR;
 using ARLogistics.Data;
 using ARLogistics.API;
@@ -63,7 +64,7 @@ namespace ARLogistics.Managers
     // ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 전역 입력값(창고 면적, 천장 높이, 팔레트 규격)을 보관하고,
+    /// 전역 입력값(창고 면적, 창고 높이, 팔레트 규격)을 보관하고,
     /// ARDetectionBridge 의 결과를 받아 용량을 계산한 뒤
     /// Gemini API 로 적재 가이드를 요청하는 Singleton Manager.
     /// </summary>
@@ -89,6 +90,7 @@ namespace ARLogistics.Managers
             if (transform.parent != null)
                 transform.SetParent(null, true);
             DontDestroyOnLoad(gameObject);
+            SceneManager.sceneLoaded += HandleSceneLoaded;
         }
 
         // ─────────────────────────────────────────────
@@ -99,8 +101,8 @@ namespace ARLogistics.Managers
         [Tooltip("창고 바닥 면적 (m²)")]
         [SerializeField] private float warehouseAreaM2 = 500f;
 
-        [Tooltip("천장 높이 (m)")]
-        [SerializeField] private float ceilingHeightM  = 6f;
+        [Tooltip("창고 높이 (m)")]
+        [SerializeField] private float ceilingHeightM  = 3f;
 
         [Header("Pallet Spec")]
         [SerializeField] private PalletSpec palletSpec = new PalletSpec
@@ -120,10 +122,6 @@ namespace ARLogistics.Managers
         [SerializeField] private ProductDatabase   productDatabase;
 
         [Header("Analysis Settings")]
-        [Tooltip("안전율 (실제 하중 = 최대 하중 × 안전율)")]
-        [Range(0.5f, 1f)]
-        [SerializeField] private float safetyFactor = 0.8f;
-
         [Tooltip("최소 신뢰도 — 이 값 미만 탐지 결과는 무시")]
         [Range(0f, 1f)]
         [SerializeField] private float minConfidence = 0.5f;
@@ -160,6 +158,31 @@ namespace ARLogistics.Managers
 
         private void Start()
         {
+            BindSceneDependencies();
+        }
+
+        private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if (Instance != this) return;
+            OnEnable();
+            BindSceneDependencies();
+        }
+
+        private void UnbindSceneDependencies()
+        {
+            if (detectionBridge != null) detectionBridge.OnObjectsLocated -= HandleObjectsLocated;
+            if (geminiClient != null)
+            {
+                geminiClient.OnGuidanceReceived -= HandleGeminiGuidance;
+                geminiClient.OnError -= HandleGeminiError;
+            }
+        }
+
+        private void HandleGeminiError(string error) => Debug.LogError($"[WarehouseManager] Gemini 오류: {error}");
+
+        private void BindSceneDependencies()
+        {
+            UnbindSceneDependencies();
             // 자동 탐색
             if (detectionBridge == null)
                 detectionBridge = FindFirstObjectByType<ARDetectionBridge>();
@@ -176,17 +199,15 @@ namespace ARLogistics.Managers
             if (geminiClient != null)
             {
                 geminiClient.OnGuidanceReceived += HandleGeminiGuidance;
-                geminiClient.OnError            += err => Debug.LogError($"[WarehouseManager] Gemini 오류: {err}");
+                geminiClient.OnError += HandleGeminiError;
             }
         }
 
         private void OnDestroy()
         {
-            if (detectionBridge != null)
-                detectionBridge.OnObjectsLocated -= HandleObjectsLocated;
-
-            if (geminiClient != null)
-                geminiClient.OnGuidanceReceived -= HandleGeminiGuidance;
+            SceneManager.sceneLoaded -= HandleSceneLoaded;
+            UnbindSceneDependencies();
+            if (Instance == this) Instance = null;
         }
 
         // ─────────────────────────────────────────────
@@ -287,25 +308,10 @@ namespace ARLogistics.Managers
         {
             var s = ProductSpecTable.Get(classId, sizeId: 3);
 
-            float productFootprint = s.LengthM * s.WidthM;
-            int unitsPerLayer = productFootprint > 0
-                ? Mathf.Max(1, Mathf.FloorToInt(palletSpec.FootprintArea / productFootprint))
-                : 1;
-
-            float effectiveMaxLoad = palletSpec.maxLoadKg * safetyFactor;
-            float loadPerLayer     = unitsPerLayer * s.WeightKg;
-            int   maxLayers        = loadPerLayer > 0
-                ? Mathf.FloorToInt(effectiveMaxLoad / loadPerLayer)
-                : 1;
-
-            float usableHeight    = ceilingHeightM - palletSpec.height - 0.3f;
-            int   heightMaxLayers = s.HeightM > 0
-                ? Mathf.FloorToInt(usableHeight / s.HeightM)
-                : maxLayers;
-
-            int finalLayers  = Mathf.Max(1, Mathf.Min(maxLayers, heightMaxLayers));
-            int totalUnits   = unitsPerLayer * finalLayers;
-            float stackHeight = palletSpec.height + s.HeightM * finalLayers;
+            var plan = StackingCalculator.Calculate(s.WidthM, s.LengthM, s.HeightM, s.WeightKg,
+                palletSpec.width, palletSpec.length, ceilingHeightM, palletSpec.maxLoadKg);
+            int unitsPerLayer = plan.PerLayer, finalLayers = plan.Layers, totalUnits = plan.Total;
+            float stackHeight = plan.StackHeight;
 
             string note = s.IsFragile   ? " [파손주의]" : "";
             note       += s.IsIrregular ? " [비정형]"   : "";
@@ -328,28 +334,10 @@ namespace ARLogistics.Managers
         /// </summary>
         private ProductCapacity CalculateCapacity(Data.ProductSpec spec, Vector3 worldPos)
         {
-            // 1단당 개수: 팔레트 단면적 / 제품 단면적 (정수 내림)
-            int unitsPerLayer = spec.maxPerLayer > 0
-                ? spec.maxPerLayer
-                : Mathf.FloorToInt(palletSpec.FootprintArea / spec.FootprintArea);
-            unitsPerLayer = Mathf.Max(1, unitsPerLayer);
-
-            // 최대 적재 단수: 하중 기준
-            float effectiveMaxLoad = palletSpec.maxLoadKg * safetyFactor;
-            float loadPerLayer     = unitsPerLayer * spec.weightKg;
-            int   maxLayers        = loadPerLayer > 0
-                ? Mathf.FloorToInt(effectiveMaxLoad / loadPerLayer)
-                : 1;
-
-            // 높이 기준 단수 제한
-            float usableHeight    = ceilingHeightM - palletSpec.height - 0.3f; // 0.3m 안전 여유
-            int   heightMaxLayers = spec.height > 0
-                ? Mathf.FloorToInt(usableHeight / spec.height)
-                : maxLayers;
-
-            int finalLayers  = Mathf.Max(1, Mathf.Min(maxLayers, heightMaxLayers));
-            int totalUnits   = unitsPerLayer * finalLayers;
-            float stackHeight = palletSpec.height + spec.height * finalLayers;
+            var plan = StackingCalculator.Calculate(spec.width, spec.length, spec.height, spec.weightKg,
+                palletSpec.width, palletSpec.length, ceilingHeightM, palletSpec.maxLoadKg);
+            int unitsPerLayer = plan.PerLayer, finalLayers = plan.Layers, totalUnits = plan.Total;
+            float stackHeight = plan.StackHeight;
 
             return new ProductCapacity
             {

@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using ARLogistics.Data;
 using ARLogistics.Detection;
+using ARLogistics.UI;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Rendering;
@@ -25,7 +26,6 @@ namespace ARLogistics.Features
         private const float StatusPanelHeight = 280f;
         private const float LayoutButtonHeight = 96f;
         private const string PlacementMessage = "바닥을 터치하여 팔레트를 배치하세요";
-        private const string PalletCreatedMessage = "가상 팔레트 생성 완료\n'적재 미리보기'를 누르면 상자가 표시됩니다";
 
         [Header("ARMain References")]
         [SerializeField] private ARRaycastManager raycastManager;
@@ -43,9 +43,7 @@ namespace ARLogistics.Features
         [SerializeField, Min(0.1f)] private float palletWidth = 1.1f;
         [SerializeField, Min(0.1f)] private float palletLength = 1.1f;
         [SerializeField, Min(0.01f)] private float palletHeight = 0.15f;
-        [Header("Stack Rules")]
-        [SerializeField, Min(0.1f)] private float recommendedStackHeight = 1.8f;
-        [SerializeField, Min(0.1f)] private float previewHeight = 2.1f;
+        [Header("Preview Appearance")]
         [SerializeField, Range(0f, 0.05f)] private float boxGap = 0.01f;
         [SerializeField] private Color safeColor = new(0.1f, 0.9f, 0.25f, 0.85f);
         [SerializeField] private Color overHeightColor = new(1f, 0.15f, 0.1f, 0.9f);
@@ -101,7 +99,6 @@ namespace ARLogistics.Features
             resetButton?.onClick.AddListener(ResetSimulation);
             layoutButton?.onClick.AddListener(CycleLayoutPreference);
             ResetSimulation();
-            TryLoadMeasurement(true);
         }
 
         private void OnDisable()
@@ -121,7 +118,14 @@ namespace ARLogistics.Features
 
         private void Update()
         {
+            if (lastSafeArea != Screen.safeArea || lastScreenSize != new Vector2(Screen.width, Screen.height))
+            {
+                lastSafeArea = Screen.safeArea;
+                lastScreenSize = new Vector2(Screen.width, Screen.height);
+                ui?.Layout();
+            }
             if (!placementEnabled || palletAnchor != null) return;
+            if (!hasMeasurement || plan == null || plan.Total == 0) return;
             if (!TryGetPointerDown(out Vector2 screenPosition, out int pointerId)) return;
             if (lastProcessedTouchFrame == Time.frameCount) return;
             lastProcessedTouchFrame = Time.frameCount;
@@ -153,6 +157,8 @@ namespace ARLogistics.Features
             if (!hasMeasurement && !TryLoadMeasurement(true))
                 return;
 
+            RefreshPlan();
+            if (plan.Total == 0) { ShowSummary(); return; }
             if (palletAnchor != null)
             {
                 GenerateStackPreview();
@@ -160,7 +166,7 @@ namespace ARLogistics.Features
             }
 
             placementEnabled = true;
-            SetStatus($"상자 크기 불러오기 완료\n{FormatMeasurement()}\n{PlacementMessage}");
+            ShowSummary();
         }
 
         public void ResetSimulation()
@@ -173,21 +179,30 @@ namespace ARLogistics.Features
             displayedBoxCount = 0;
             palletTopHeight = palletHeight;
             placementEnabled = true;
-            SetStatus("상자 크기를 먼저 측정해주세요");
+            orientation = StackOrientation.Recommended;
+            if (TryLoadMeasurement(false)) { RefreshPlan(); ShowSummary(); }
+            else
+            {
+                plan = null;
+                ui?.ShowPlans(null, orientation);
+                ui?.SetAction("측정이 필요해요", false);
+                ui?.SetTitle("먼저 상자를 확인해 주세요");
+                SetStatus("하단의 측정 화면에서 화물을 인식해 주세요.\n측정 결과를 저장하면 여기서 적재 모습을 확인할 수 있어요.");
+            }
         }
 
         private void TryPlacePallet(Vector2 screenPosition)
         {
-            if (raycastManager == null) { SetStatus("AR 평면 감지를 초기화할 수 없습니다"); return; }
+            if (raycastManager == null) { SetStatus("바닥을 인식할 준비가 되지 않았어요. 카메라 상태를 확인해 주세요."); return; }
             raycastHits.Clear();
             if (!raycastManager.Raycast(screenPosition, raycastHits, TrackableType.PlaneWithinPolygon))
             {
-                SetStatus("감지된 바닥을 터치해 주세요");
+                SetStatus("카메라를 천천히 움직여 바닥을 비춰 주세요. 바닥이 인식되면 놓을 위치를 터치해 주세요.");
                 return;
             }
             if (!TrySelectHorizontalFloorHit(out ARRaycastHit floorHit))
             {
-                SetStatus("수평으로 감지된 바닥을 터치해 주세요");
+                SetStatus("벽 대신 평평한 바닥을 선택해 주세요.");
                 return;
             }
 
@@ -195,7 +210,7 @@ namespace ARLogistics.Features
             CreatePallet(new Pose(hitPose.position, GetHorizontalFacingRotation(hitPose.rotation)));
             CreateSafetyHeightGuide();
             placementEnabled = false;
-            SetStatus(PalletCreatedMessage);
+            GenerateStackPreview();
         }
 
         private void CreatePallet(Pose pose)
@@ -271,7 +286,8 @@ namespace ARLogistics.Features
 
             if (!TryCalculateLayout(product, out StackLayout layout))
             {
-                SetStatus($"상자 크기 불러오기 완료\n{FormatMeasurement()}\n상자가 팔레트보다 크거나 적재 높이를 초과합니다");
+                if (heightGuide != null) Destroy(heightGuide);
+                ShowSummary();
                 return;
             }
 
@@ -298,10 +314,12 @@ namespace ARLogistics.Features
                 $"안전 {layout.safeLayers}층 · 높이 {palletHeight + layout.safeLayers * product.height:F2}m\n" +
                 $"공간 활용 {usagePercent:F1}% · 여유 {RemainingSpacePercent:F1}%" +
                 (visualBoxCount < totalPreviewBoxes
-                    ? $"\n미리보기 표시: {visualBoxCount:N0}/{totalPreviewBoxes:N0}개 (성능 최적화)"
+                    ? $"\n화면에는 {visualBoxCount:N0}개만 표시해요. 계산 수량은 {totalPreviewBoxes:N0}개예요."
                     : string.Empty);
 
-            SetStatus(finalStatus + "\n박스 에셋 생성 중...");
+            ui?.SetAction("처음부터 보기", true);
+            ui?.SetTitle("아래에서부터 쌓고 있어요");
+            SetStatus(finalStatus);
             spawnBoxesRoutine = StartCoroutine(
                 SpawnBoxesOverFrames(product, layout, visualBoxCount, finalStatus));
         }
@@ -368,7 +386,7 @@ namespace ARLogistics.Features
                     activeBoxes.Add(box);
                     displayedBoxCount++;
 
-                    if (displayedBoxCount % boxesPerFrame == 0)
+                    if (displayedBoxCount % Mathf.Max(1, boxesPerFrame) == 0)
                         yield return null;
                 }
 
@@ -377,7 +395,75 @@ namespace ARLogistics.Features
             }
 
             spawnBoxesRoutine = null;
+            ui?.SetTitle("적재 미리보기");
             SetStatus(finalStatus);
+        }
+
+        private void RefreshPlan()
+        {
+            palletWidth = AppSettings.PalletWidth;
+            palletLength = AppSettings.PalletLength;
+            palletHeight = StackingCalculator.PalletHeight;
+            var plans = new StackingPlan[3];
+            float weight = ProductSpecTable.Get(currentMeasurement.ClassId).WeightKg;
+            for (int i = 0; i < plans.Length; i++)
+                plans[i] = StackingCalculator.Calculate(currentMeasurement.WidthM, currentMeasurement.DepthM,
+                    currentMeasurement.HeightM, weight, palletWidth, palletLength,
+                    AppSettings.CeilingHeightM, AppSettings.PalletMaxLoadKg, (StackOrientation)i);
+            plan = plans[(int)orientation];
+            EstimatedCapacity = plan.Total;
+            RemainingSpacePercent = 100 - plan.Utilization;
+            ui?.ShowPlans(plans, orientation);
+        }
+
+        private void SelectLayout(StackOrientation selected)
+        {
+            if (!hasMeasurement) return;
+            orientation = selected;
+            RefreshPlan();
+            if (palletTransform != null && plan.Total > 0) GenerateStackPreview();
+            else { ClearBoxes(); if (heightGuide != null) Destroy(heightGuide); ShowSummary(); }
+        }
+
+        private string SummaryText()
+        {
+            string size = $"등록 규격 {currentMeasurement.WidthM * 100:F0} × {currentMeasurement.DepthM * 100:F0} × {currentMeasurement.HeightM * 100:F0}cm";
+            if (plan.Total == 0) return size + "\n\n" + plan.Message + "\n방향을 바꾸거나 홈에서 적재 조건을 확인해 주세요.";
+            return $"<b>이번 조건에서는 {plan.Layers}단으로 미리 봐요</b>\n" +
+                $"한 단에 {plan.PerLayer:N0}개 · 팔레트당 총 {plan.Total:N0}개\n" +
+                $"전체 높이 {plan.StackHeight:F2}m · 화물 무게 {plan.TotalWeight:F1}kg\n" +
+                $"바닥 사용률 {plan.Utilization:F0}%\n" + size + "\n" + plan.Message +
+                "\n실제 적재 전 포장 강도·결속을 확인하세요.";
+        }
+
+        private void ShowSummary()
+        {
+            ui?.SetTitle(plan.Total > 0 ? "어떻게 쌓을지 확인해 보세요" : "지금 조건으로는 쌓기 어려워요");
+            ui?.SetAction(palletTransform == null ? "바닥에 배치" : "상자 쌓기", plan.Total > 0);
+            SetStatus(SummaryText() + (plan.Total > 0 && palletTransform == null ? "\n\n" + PlacementMessage : ""));
+        }
+
+        private void CreateHeightGuide()
+        {
+            if (heightGuide != null) Destroy(heightGuide);
+            heightGuide = new GameObject("계산된 적재 높이");
+            heightGuide.transform.SetParent(palletTransform, false);
+            heightGuide.transform.localPosition = Vector3.up * plan.StackHeight;
+            var materialSource = boxPreviewPrefab != null ? boxPreviewPrefab.GetComponentInChildren<Renderer>() : null;
+            var block = CreateColorBlock(new Color(1f, 0.7f, 0.1f, 1));
+            for (int i = 0; i < 4; i++)
+            {
+                var edge = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                edge.transform.SetParent(heightGuide.transform, false);
+                edge.transform.localPosition = i < 2 ? new Vector3(0, 0, (i == 0 ? -1 : 1) * palletLength / 2)
+                    : new Vector3((i == 2 ? -1 : 1) * palletWidth / 2, 0, 0);
+                edge.transform.localScale = i < 2 ? new Vector3(palletWidth, 0.012f, 0.012f) : new Vector3(0.012f, 0.012f, palletLength);
+                Destroy(edge.GetComponent<Collider>());
+                var renderer = edge.GetComponent<Renderer>();
+                if (materialSource != null) renderer.sharedMaterial = materialSource.sharedMaterial;
+                renderer.SetPropertyBlock(block);
+                renderer.shadowCastingMode = ShadowCastingMode.Off;
+            }
         }
 
         private void InitializeBoxPool()

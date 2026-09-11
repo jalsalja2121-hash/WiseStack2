@@ -62,7 +62,7 @@ namespace ARLogistics.UI
             if (confirmButton != null)
                 confirmButton.interactable = false;
 
-            SetStatus("창고 면적, 천장 높이, 팔레트 규격과 최대 하중을 말해 주세요.");
+            SetStatus("창고 면적, 창고 높이, 팔레트 규격과 최대 하중을 말해 주세요.");
         }
 
         private void OnDisable()
