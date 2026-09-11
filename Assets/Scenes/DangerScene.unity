@@ -1615,7 +1615,6 @@ GameObject:
   - component: {fileID: 1920098614}
   - component: {fileID: 1920098613}
   - component: {fileID: 1920098612}
-  - component: {fileID: 1920098611}
   - component: {fileID: 1920098610}
   m_Layer: 0
   m_Name: DangerSystem
@@ -1640,23 +1639,6 @@ MonoBehaviour:
   modelId: gemini-2.0-flash
   maxOutputTokens: 256
   temperature: 0.3
---- !u!114 &1920098611
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1920098609}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2f1585a5068b58f4893a50277c2a4188, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.DangerScene.PresetScenarioController
-  overlayUI: {fileID: 1920098613}
-  presetPanel: {fileID: 0}
-  safeButton: {fileID: 0}
-  warningButton: {fileID: 0}
-  dangerButton: {fileID: 0}
 --- !u!114 &1920098612
 MonoBehaviour:
   m_ObjectHideFlags: 0
