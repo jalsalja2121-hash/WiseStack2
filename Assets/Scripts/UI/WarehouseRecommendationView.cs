@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using ARLogistics.Data;
 using UnityEngine;
@@ -11,6 +12,8 @@ namespace ARLogistics.UI
         private static readonly Color Ink = new(0.055f, 0.10f, 0.17f, 1f);
         private static readonly Color Pale = new(0.94f, 0.97f, 1f, 1f);
         private RectTransform _content;
+        private RectTransform _viewport;
+        private readonly List<Text> _cardTexts = new();
         private Font _font;
         private WarehouseStrategyComparison _comparison;
         private WarehouseStrategy[] _strategies;
@@ -32,9 +35,11 @@ namespace ARLogistics.UI
         private void Build()
         {
             var viewport = Rect("RecommendationViewport", transform);
-            viewport.anchorMin = new Vector2(0.04f, 0.105f);
+            _viewport = viewport;
+            viewport.anchorMin = new Vector2(0.04f, 0f);
             viewport.anchorMax = new Vector2(0.96f, 0.87f);
-            viewport.offsetMin = viewport.offsetMax = Vector2.zero;
+            viewport.offsetMax = Vector2.zero;
+            PositionViewport();
             viewport.gameObject.AddComponent<Image>().color = new Color(0.965f, 0.977f, 0.99f, 0.97f);
             var scroll = viewport.gameObject.AddComponent<ScrollRect>();
             scroll.horizontal = false;
@@ -60,8 +65,37 @@ namespace ARLogistics.UI
             scroll.scrollSensitivity = 35f;
         }
 
+        private void OnRectTransformDimensionsChange()
+        {
+            if (_viewport != null) PositionViewport();
+        }
+
+        private void LateUpdate()
+        {
+            foreach (Text cardText in _cardTexts)
+            {
+                if (cardText == null) continue;
+                LayoutElement layout = cardText.transform.parent.GetComponent<LayoutElement>();
+                float requiredHeight = Mathf.Max(layout.minHeight, cardText.preferredHeight + 24f);
+                if (Mathf.Abs(layout.preferredHeight - requiredHeight) > 1f)
+                    layout.preferredHeight = requiredHeight;
+            }
+        }
+
+        private void PositionViewport()
+        {
+            Canvas canvas = GetComponent<Canvas>();
+            float scale = canvas != null ? Mathf.Max(0.01f, canvas.scaleFactor) : 1f;
+            float safeBottom = Screen.safeArea.yMin / scale;
+            float navHeight = GameObject.Find("NavBar")?.GetComponent<RectTransform>()?.rect.height ?? 140f;
+            float bottom = safeBottom + navHeight + 16f;
+            if (Mathf.Abs(_viewport.offsetMin.y - bottom) > 0.5f)
+                _viewport.offsetMin = new Vector2(0f, bottom);
+        }
+
         private void Refresh()
         {
+            _cardTexts.Clear();
             for (int i = _content.childCount - 1; i >= 0; i--) Destroy(_content.GetChild(i).gameObject);
             if (!BoxMeasurementStore.TryGet(out BoxMeasurement cargo))
             {
@@ -94,7 +128,7 @@ namespace ARLogistics.UI
             _summary = Card("전체 창고 적용 예상량", "", 138);
             SectionTitle("적재 전략 비교");
             Choices();
-            _detail = Card("선택한 전략 상세", "", 345);
+            _detail = Card("선택한 전략 상세", "", 400);
             Select(_comparison.B.Available ? 1 : _comparison.A.Available ? 0 : _comparison.C.Available ? 2 : 1);
 
             var basis = new StringBuilder();
@@ -112,7 +146,7 @@ namespace ARLogistics.UI
         private void Choices()
         {
             var row = Rect("StrategyChoices", _content);
-            Height(row, 148);
+            Height(row, 176);
             var layout = row.gameObject.AddComponent<HorizontalLayoutGroup>();
             layout.spacing = 10;
             layout.childControlWidth = layout.childControlHeight = true;
@@ -133,7 +167,7 @@ namespace ARLogistics.UI
                 label.offsetMax = new Vector2(-5, -5);
                 var strategy = _strategies[i];
                 _choiceTexts[i] = Text(label,
-                    $"{strategy.Name}\n{(strategy.Available ? $"팔레트당 {strategy.PerPallet:N0}개" : "적재 불가")}", 22, Blue);
+                    $"{strategy.Name}\n{(strategy.Available ? $"팔레트당 {strategy.PerPallet:N0}개" : "적재 불가")}", 32, Blue);
                 _choiceTexts[i].alignment = TextAnchor.MiddleCenter;
                 _choiceTexts[i].fontStyle = FontStyle.Bold;
             }
@@ -172,7 +206,7 @@ namespace ARLogistics.UI
             Height(root, 58);
             root.gameObject.AddComponent<Image>().color = Pale;
             var button = root.gameObject.AddComponent<Button>();
-            var label = Text(Rect("Label", root), "계산 근거와 한계 펼치기", 25, Blue);
+            var label = Text(Rect("Label", root), "계산 근거와 한계 펼치기", 36, Blue);
             label.rectTransform.anchorMin = Vector2.zero;
             label.rectTransform.anchorMax = Vector2.one;
             label.rectTransform.offsetMin = label.rectTransform.offsetMax = Vector2.zero;
@@ -186,7 +220,7 @@ namespace ARLogistics.UI
             inner.anchorMax = Vector2.one;
             inner.offsetMin = new Vector2(22, 12);
             inner.offsetMax = new Vector2(-22, -12);
-            var detailText = Text(inner, value, 23, Ink);
+            var detailText = Text(inner, value, 32, Ink);
             detailText.verticalOverflow = VerticalWrapMode.Overflow;
             Canvas.ForceUpdateCanvases();
             panel.GetComponent<LayoutElement>().preferredHeight = Mathf.Max(300f, detailText.preferredHeight + 24f);
@@ -202,6 +236,7 @@ namespace ARLogistics.UI
         {
             var card = Rect(title + "Card", _content);
             Height(card, height);
+            card.GetComponent<LayoutElement>().minHeight = height;
             card.gameObject.AddComponent<Image>().color = Color.white;
             Border(card.gameObject);
             var inner = Rect("Text", card);
@@ -209,14 +244,17 @@ namespace ARLogistics.UI
             inner.anchorMax = Vector2.one;
             inner.offsetMin = new Vector2(22, 12);
             inner.offsetMax = new Vector2(-22, -12);
-            return Text(inner, $"<b><color=#1764C7>{title}</color></b>\n{body}", 26, Ink);
+            Text cardText = Text(inner, $"<b><color=#1764C7>{title}</color></b>\n{body}", 32, Ink);
+            cardText.verticalOverflow = VerticalWrapMode.Overflow;
+            _cardTexts.Add(cardText);
+            return cardText;
         }
 
         private void SectionTitle(string value)
         {
             var root = Rect("SectionTitle", _content);
             Height(root, 44);
-            Text(root, value, 28, Blue).fontStyle = FontStyle.Bold;
+            Text(root, value, 40, Blue).fontStyle = FontStyle.Bold;
         }
 
         private Text Text(RectTransform root, string value, int size, Color color)

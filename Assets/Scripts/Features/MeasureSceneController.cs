@@ -367,7 +367,7 @@ namespace ARLogistics.Features
 
             geminiMessageText = textObject.GetComponent<Text>();
             geminiMessageText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            geminiMessageText.fontSize = 26;
+            geminiMessageText.fontSize = 34;
             geminiMessageText.color = new Color(0.075f, 0.14f, 0.23f, 1f);
             geminiMessageText.alignment = TextAnchor.UpperLeft;
             geminiMessageText.horizontalOverflow = HorizontalWrapMode.Wrap;
@@ -468,7 +468,7 @@ namespace ARLogistics.Features
             buttonLabel.rectTransform.anchorMax = Vector2.one;
             buttonLabel.rectTransform.offsetMin = buttonLabel.rectTransform.offsetMax = Vector2.zero;
             buttonLabel.font = statusText.font;
-            buttonLabel.fontSize = 25;
+            buttonLabel.fontSize = 34;
             buttonLabel.color = new Color(0.09f, 0.39f, 0.78f, 1f);
             buttonLabel.alignment = TextAnchor.MiddleCenter;
             buttonLabel.text = "계산 근거 펼치기";
@@ -480,7 +480,7 @@ namespace ARLogistics.Features
             _detailsText = new GameObject("MeasureDetails", typeof(RectTransform), typeof(Text), typeof(LayoutElement)).GetComponent<Text>();
             _detailsText.transform.SetParent(_resultsContent, false);
             _detailsText.font = statusText.font;
-            _detailsText.fontSize = 24;
+            _detailsText.fontSize = 32;
             _detailsText.color = new Color(0.075f, 0.14f, 0.23f, 1f);
             _detailsText.horizontalOverflow = HorizontalWrapMode.Wrap;
             _detailsText.verticalOverflow = VerticalWrapMode.Overflow;
@@ -509,14 +509,14 @@ namespace ARLogistics.Features
             errorLabel.rectTransform.anchorMax = Vector2.one;
             errorLabel.rectTransform.offsetMin = errorLabel.rectTransform.offsetMax = Vector2.zero;
             errorLabel.font = statusText.font;
-            errorLabel.fontSize = 23;
+            errorLabel.fontSize = 32;
             errorLabel.color = new Color(0.09f, 0.39f, 0.78f, 1f);
             errorLabel.alignment = TextAnchor.MiddleCenter;
             errorLabel.text = "AI 오류 상세 펼치기";
             _geminiErrorText = new GameObject("GeminiErrorDetails", typeof(RectTransform), typeof(Text), typeof(LayoutElement)).GetComponent<Text>();
             _geminiErrorText.transform.SetParent(_resultsContent, false);
             _geminiErrorText.font = statusText.font;
-            _geminiErrorText.fontSize = 23;
+            _geminiErrorText.fontSize = 32;
             _geminiErrorText.color = new Color(0.075f, 0.14f, 0.23f, 1f);
             _geminiErrorText.horizontalOverflow = HorizontalWrapMode.Wrap;
             _geminiErrorText.verticalOverflow = VerticalWrapMode.Overflow;
@@ -534,6 +534,7 @@ namespace ARLogistics.Features
         private void PrepareResultText(Text text)
         {
             text.transform.SetParent(_resultsContent, false);
+            text.fontSize = 36;
             text.color = new Color(0.075f, 0.14f, 0.23f, 1f);
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Overflow;
@@ -550,7 +551,7 @@ namespace ARLogistics.Features
             float safeBottom = Screen.safeArea.yMin / scale;
             float navHeight = Mathf.Max(140f, GameObject.Find("NavBar")?.GetComponent<RectTransform>()?.rect.height ?? 140f);
             float lower = safeBottom + navHeight + 204f;
-            float upper = Mathf.Max(lower + 120f, ((RectTransform)canvas.transform).rect.height * 0.52f);
+            float upper = Mathf.Max(lower + 120f, ((RectTransform)canvas.transform).rect.height * 0.58f);
             _resultsViewport.anchorMin = _resultsViewport.anchorMax = Vector2.zero;
             _resultsViewport.pivot = Vector2.zero;
             _resultsViewport.anchoredPosition = new Vector2(24f, lower);

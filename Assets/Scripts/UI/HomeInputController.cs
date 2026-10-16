@@ -17,6 +17,11 @@ namespace ARLogistics.UI
         [SerializeField] private InputField palletLengthInput;
         [SerializeField] private InputField palletMaxLoadInput;
         private GameObject confirmationPopup;
+        private RectTransform headerRect;
+        private RectTransform settingsRect;
+        private RectTransform voiceRect;
+        private Rect lastSafeArea;
+        private Vector2 lastCanvasSize;
 
         private void Awake()
         {
@@ -40,6 +45,9 @@ namespace ARLogistics.UI
             WireButton("DangerOverlayBtn", GoToDanger);
             WireButton("MeasurementBtn",   GoToMeasure);
             StyleExistingSurfaces();
+            headerRect = GameObject.Find("Header")?.GetComponent<RectTransform>();
+            settingsRect = GameObject.Find("SettingsCard")?.GetComponent<RectTransform>();
+            voiceRect = GameObject.Find("VoiceInputPanel")?.GetComponent<RectTransform>();
         }
 
         private void StyleExistingSurfaces()
@@ -105,6 +113,37 @@ namespace ARLogistics.UI
         private void Start()
         {
             PopulateFields();
+            PositionHomePanels();
+        }
+
+        private void LateUpdate()
+        {
+            RectTransform canvasRect = transform as RectTransform;
+            if (canvasRect != null && (!lastSafeArea.Equals(Screen.safeArea) || lastCanvasSize != canvasRect.rect.size))
+                PositionHomePanels();
+        }
+
+        private void PositionHomePanels()
+        {
+            RectTransform canvasRect = transform as RectTransform;
+            Canvas canvas = GetComponent<Canvas>();
+            if (canvasRect == null || canvas == null) return;
+            float scale = Mathf.Max(0.01f, canvas.scaleFactor);
+            float height = canvasRect.rect.height;
+            float safeTop = (Screen.height - Screen.safeArea.yMax) / scale;
+            float safeBottom = Screen.safeArea.yMin / scale;
+            if (headerRect != null)
+                headerRect.offsetMax = new Vector2(headerRect.offsetMax.x, -safeTop);
+            if (settingsRect != null && voiceRect != null)
+            {
+                float navHeight = GameObject.Find("NavBar")?.GetComponent<RectTransform>()?.rect.height ?? 140f;
+                float bottom = Mathf.Max(height * voiceRect.anchorMin.y, navHeight + safeBottom + 8f);
+                float top = height * settingsRect.anchorMin.y - 8f;
+                voiceRect.offsetMin = new Vector2(voiceRect.offsetMin.x, bottom - height * voiceRect.anchorMin.y);
+                voiceRect.offsetMax = new Vector2(voiceRect.offsetMax.x, top - height * voiceRect.anchorMax.y);
+            }
+            lastSafeArea = Screen.safeArea;
+            lastCanvasSize = canvasRect.rect.size;
         }
 
         public void ConfirmManualSave()
@@ -171,12 +210,12 @@ namespace ARLogistics.UI
 
             var card = new GameObject("Card", typeof(RectTransform), typeof(Image)).GetComponent<RectTransform>();
             card.SetParent(backdrop, false);
-            card.anchorMin = new Vector2(0.08f, 0.34f);
-            card.anchorMax = new Vector2(0.92f, 0.66f);
+            card.anchorMin = new Vector2(0.08f, 0.29f);
+            card.anchorMax = new Vector2(0.92f, 0.71f);
             card.offsetMin = card.offsetMax = Vector2.zero;
             card.GetComponent<Image>().color = Color.white;
-            PopupText(card, "Title", title, 32, new Vector2(0.07f, 0.73f), new Vector2(0.93f, 0.95f), true);
-            PopupText(card, "Message", message, 25, new Vector2(0.07f, 0.25f), new Vector2(0.93f, 0.73f), false);
+            PopupText(card, "Title", title, 48, new Vector2(0.07f, 0.73f), new Vector2(0.93f, 0.95f), true);
+            PopupText(card, "Message", message, 34, new Vector2(0.07f, 0.25f), new Vector2(0.93f, 0.73f), false);
             var button = new GameObject("Confirm", typeof(RectTransform), typeof(Image), typeof(Button)).GetComponent<RectTransform>();
             button.SetParent(card, false);
             button.anchorMin = new Vector2(0.28f, 0.04f);
@@ -189,7 +228,7 @@ namespace ARLogistics.UI
                 confirmationPopup = null;
                 Destroy(popup);
             });
-            PopupText(button, "Label", "확인", 26, Vector2.zero, Vector2.one, true).color = Color.white;
+            PopupText(button, "Label", "확인", 36, Vector2.zero, Vector2.one, true).color = Color.white;
         }
 
         private static Text PopupText(Transform parent, string name, string value, int size,

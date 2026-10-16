@@ -10,6 +10,8 @@ namespace ARLogistics.Navigation
         private static readonly Color ActiveTabColor = new Color(0.09f, 0.39f, 0.78f, 1f);
         private static readonly Color InactiveTabColor = new Color(0.14f, 0.23f, 0.34f, 1f);
         private GameObject measurementRequiredDialog;
+        private RectTransform navigationRect;
+        private float lastSafeBottom = -1f;
 
         private void Awake()
         {
@@ -25,6 +27,25 @@ namespace ARLogistics.Navigation
             Wire(navBar, "DangerOverlayBtn", GoToDanger);
             Wire(navBar, "MeasurementBtn",   GoToMeasure);
             RefreshActiveTab(navBar);
+            navigationRect = navBar.GetComponent<RectTransform>();
+            PositionNavigationInSafeArea();
+        }
+
+        private void LateUpdate()
+        {
+            if (navigationRect != null) PositionNavigationInSafeArea();
+        }
+
+        private void PositionNavigationInSafeArea()
+        {
+            Canvas canvas = navigationRect.GetComponentInParent<Canvas>();
+            if (canvas == null) return;
+            float bottom = Screen.safeArea.yMin / Mathf.Max(0.01f, canvas.scaleFactor);
+            if (Mathf.Abs(bottom - lastSafeBottom) < 0.5f) return;
+            lastSafeBottom = bottom;
+            Vector2 position = navigationRect.anchoredPosition;
+            position.y = navigationRect.rect.height * navigationRect.pivot.y + bottom;
+            navigationRect.anchoredPosition = position;
         }
 
         private static void RefreshActiveTab(GameObject navBar)
@@ -39,6 +60,8 @@ namespace ARLogistics.Navigation
                 var image = button.GetComponent<Image>();
                 if (image != null)
                     image.color = selected ? ActiveTabColor : InactiveTabColor;
+                Text label = button.GetComponentInChildren<Text>(true);
+                if (label != null) label.fontSize = 36;
             }
         }
 

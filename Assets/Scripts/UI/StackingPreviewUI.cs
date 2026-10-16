@@ -29,7 +29,7 @@ namespace ARLogistics.UI
             var cardBorder = card.GetComponent<Outline>() ?? card.gameObject.AddComponent<Outline>();
             cardBorder.effectColor = new Color(0.82f, 0.88f, 0.94f, 0.8f);
             cardBorder.effectDistance = new Vector2(1f, -1f);
-            title = Label(card, "Title", "적재 미리보기", 44);
+            title = Label(card, "Title", "적재 미리보기", 48);
             title.fontStyle = FontStyle.Bold;
             Anchor(title.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(28, -78), new Vector2(-28, -18));
 
@@ -77,7 +77,7 @@ namespace ARLogistics.UI
                 Anchor(rect, new Vector2(i / 3f, 0), new Vector2((i + 1) / 3f, 1), new Vector2(5, 0), new Vector2(-5, 0));
                 rect.gameObject.AddComponent<Image>().color = Pale;
                 options[i] = rect.gameObject.AddComponent<Button>();
-                labels[i] = Label(rect, "Label", "", 32);
+                labels[i] = Label(rect, "Label", "", 36);
                 labels[i].alignment = TextAnchor.MiddleCenter;
                 Anchor(labels[i].rectTransform, Vector2.zero, Vector2.one, new Vector2(12, 8), new Vector2(-12, -8));
                 options[i].onClick.AddListener(() => select((StackOrientation)index));
