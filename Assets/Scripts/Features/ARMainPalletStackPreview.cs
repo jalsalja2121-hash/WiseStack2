@@ -57,6 +57,7 @@ namespace ARLogistics.Features
         private GameObject boxPoolRoot;
         private CameraFrameProvider cameraFrameProvider;
         private MaterialPropertyBlock safeColorBlock;
+        private MaterialPropertyBlock alternateLayerColorBlock;
         private MaterialPropertyBlock overHeightColorBlock;
         private Coroutine spawnBoxesRoutine;
 
@@ -352,7 +353,7 @@ namespace ARLogistics.Features
                     box.transform.localPosition = position;
                     box.transform.localRotation = Quaternion.identity;
                     box.transform.localScale = scale;
-                    ApplyBoxColor(displayedBoxCount, isOverHeight);
+                    ApplyBoxColor(displayedBoxCount, isOverHeight, layer);
                     box.SetActive(true);
                     activeBoxes.Add(box);
                     displayedBoxCount++;
@@ -366,7 +367,9 @@ namespace ARLogistics.Features
 
             spawnBoxesRoutine = null;
             ui?.SetTitle("적재 미리보기");
-            SetStatus(finalStatus);
+            if (displayedBoxCount != visualBoxCount || activeBoxes.Count != visualBoxCount)
+                Debug.LogError($"[ARMain] 적재 미리보기 수량 불일치: 표시 예정 {visualBoxCount}, 생성 {displayedBoxCount}, 활성 {activeBoxes.Count}", this);
+            SetStatus(finalStatus + $"\nAR에 표시된 상자 {activeBoxes.Count:N0}개");
         }
 
         private void RefreshPlan()
@@ -399,8 +402,10 @@ namespace ARLogistics.Features
         {
             string size = $"등록 규격 {currentMeasurement.WidthM * 100:F0} × {currentMeasurement.DepthM * 100:F0} × {currentMeasurement.HeightM * 100:F0}cm";
             if (plan.Total == 0) return size + "\n\n" + plan.Message + "\n방향을 바꾸거나 홈에서 적재 조건을 확인해 주세요.";
-            return $"<b>이번 조건에서는 {plan.Layers}단으로 미리 봐요</b>\n" +
-                $"한 단에 {plan.PerLayer:N0}개 · 팔레트당 총 {plan.Total:N0}개\n" +
+            string selected = orientation == StackOrientation.Recommended ? "추천 배치" :
+                orientation == StackOrientation.Original ? "기본 방향" : "90° 회전";
+            return $"<b>현재 선택 배치: {selected}</b>\n" +
+                $"1층당 {plan.PerLayer:N0}개 × {plan.Layers}층 = 총 {plan.Total:N0}개\n" +
                 $"전체 높이 {plan.StackHeight:F2}m · 화물 무게 {plan.TotalWeight:F1}kg\n" +
                 $"바닥 사용률 {plan.Utilization:F0}%\n" + size + "\n" + plan.Message +
                 "\n실제 적재 전 포장 강도·결속을 확인하세요.";
@@ -441,6 +446,9 @@ namespace ARLogistics.Features
             boxPoolRoot = new GameObject("ARMain_StackPreviewBoxPool");
             boxPoolRoot.SetActive(false);
             safeColorBlock = CreateColorBlock(safeColor);
+            alternateLayerColorBlock = CreateColorBlock(new Color(
+                safeColor.r * 0.65f, safeColor.g * 0.78f, safeColor.b * 0.65f,
+                safeColor.a));
             overHeightColorBlock = CreateColorBlock(overHeightColor);
         }
 
@@ -488,9 +496,10 @@ namespace ARLogistics.Features
             return boxPool[index];
         }
 
-        private void ApplyBoxColor(int poolIndex, bool isOverHeight)
+        private void ApplyBoxColor(int poolIndex, bool isOverHeight, int layer)
         {
-            MaterialPropertyBlock block = isOverHeight ? overHeightColorBlock : safeColorBlock;
+            MaterialPropertyBlock block = isOverHeight ? overHeightColorBlock :
+                layer % 2 == 0 ? safeColorBlock : alternateLayerColorBlock;
             foreach (Renderer boxRenderer in boxPoolRenderers[poolIndex])
                 boxRenderer.SetPropertyBlock(block);
         }

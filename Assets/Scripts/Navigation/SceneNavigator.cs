@@ -7,6 +7,8 @@ namespace ARLogistics.Navigation
 {
     public class SceneNavigator : MonoBehaviour
     {
+        private static readonly Color ActiveTabColor = new Color(0.09f, 0.39f, 0.78f, 1f);
+        private static readonly Color InactiveTabColor = new Color(0.14f, 0.23f, 0.34f, 1f);
         private GameObject measurementRequiredDialog;
 
         private void Awake()
@@ -22,6 +24,22 @@ namespace ARLogistics.Navigation
             Wire(navBar, "StackPreviewBtn",  GoToARMain);
             Wire(navBar, "DangerOverlayBtn", GoToDanger);
             Wire(navBar, "MeasurementBtn",   GoToMeasure);
+            RefreshActiveTab(navBar);
+        }
+
+        private static void RefreshActiveTab(GameObject navBar)
+        {
+            string scene = SceneManager.GetActiveScene().name;
+            foreach (var button in navBar.GetComponentsInChildren<Button>(true))
+            {
+                bool selected = (scene == "HomeScene" && button.name == "HomeBtn") ||
+                    (scene == "MeasureScene" && button.name == "MeasurementBtn") ||
+                    (scene == "ARMain" && button.name == "StackPreviewBtn") ||
+                    (scene == "DangerScene" && button.name == "DangerOverlayBtn");
+                var image = button.GetComponent<Image>();
+                if (image != null)
+                    image.color = selected ? ActiveTabColor : InactiveTabColor;
+            }
         }
 
         private static void Wire(

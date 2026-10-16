@@ -60,7 +60,7 @@ namespace ARLogistics.UI
         private void Start()
         {
             if (confirmButton != null)
-                confirmButton.interactable = false;
+                confirmButton.interactable = true;
 
             SetStatus("창고 면적, 창고 높이, 팔레트 규격과 최대 하중을 말해 주세요.");
         }
@@ -134,8 +134,14 @@ namespace ARLogistics.UI
 
         private void OnConfirmPressed()
         {
-            if (!_isRecording || _isRequesting || _recording == null)
+            if (_isRequesting)
                 return;
+            if (!_isRecording)
+            {
+                FindFirstObjectByType<HomeInputController>()?.ConfirmManualSave();
+                return;
+            }
+            if (_recording == null) return;
 
             int recordedSamples = Microphone.GetPosition(_deviceName);
             if (recordedSamples <= 0 && !Microphone.IsRecording(_deviceName))
@@ -217,6 +223,8 @@ namespace ARLogistics.UI
             ResetControls(appliedCount > 0
                 ? $"{appliedCount}개 항목을 자동 입력했습니다.\n인식: {transcript}"
                 : $"입력 가능한 숫자를 찾지 못했습니다.\n인식: {transcript}");
+            if (appliedCount > 0)
+                FindFirstObjectByType<HomeInputController>()?.ShowAutomaticEntryConfirmation();
         }
 
         private int ApplyResult(GeminiVoiceResult result)
@@ -303,7 +311,7 @@ namespace ARLogistics.UI
             _isRecording = false;
             _isRequesting = false;
             if (recordButton != null) recordButton.interactable = true;
-            if (confirmButton != null) confirmButton.interactable = false;
+            if (confirmButton != null) confirmButton.interactable = true;
             SetButtonText(recordButton, "음성 인식 시작");
             SetStatus(message);
         }

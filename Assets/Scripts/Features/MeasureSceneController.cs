@@ -58,6 +58,12 @@ namespace ARLogistics.Features
 
         private string _savedMeasurementSummary = "";
         private string _analysisSummary = "";
+        private RectTransform _resultsViewport;
+        private RectTransform _resultsContent;
+        private Text _detailsText;
+        private Button _detailsButton;
+        private Button _geminiErrorButton;
+        private Text _geminiErrorText;
 
         private void Awake()
         {
@@ -77,6 +83,7 @@ namespace ARLogistics.Features
                 analyzeButton.interactable = false;
 
             PositionActionBarAboveNavigation();
+            SetupResultsLayout();
             SetClassification(_yolo != null
                 ? "분류 결과\n카메라로 화물을 비춰주세요"
                 : "분류 결과\nYoloDetector를 찾을 수 없습니다");
@@ -87,7 +94,10 @@ namespace ARLogistics.Features
         private void OnRectTransformDimensionsChange()
         {
             if (isActiveAndEnabled)
+            {
                 PositionActionBarAboveNavigation();
+                PositionResultsLayout();
+            }
         }
 
         private void OnEnable()
@@ -186,13 +196,12 @@ namespace ARLogistics.Features
             var result = new StringBuilder();
             var geminiLines = new List<string>();
 
+            var details = new StringBuilder();
             if (!string.IsNullOrEmpty(_savedMeasurementSummary))
-                result.AppendLine(_savedMeasurementSummary);
-            result.AppendLine("분석 결과");
-            result.AppendLine($"창고 면적 {warehouseArea:F0}m² · 창고 높이 {ceilingHeight:F2}m");
-            result.AppendLine("시뮬레이션은 팔레트 포함 1.8m 이내 · 포장 강도·결속 별도 확인");
-            result.AppendLine($"팔레트 {palletWidth:F2}m × {palletLength:F2}m · 배치 가능 {palletCount}개");
-            result.AppendLine();
+                details.AppendLine(_savedMeasurementSummary);
+            details.AppendLine($"창고 면적 {warehouseArea:F0}m² · 창고 높이 {ceilingHeight:F2}m");
+            details.AppendLine("시뮬레이션은 팔레트 포함 1.8m 이내 · 포장 강도·결속 별도 확인");
+            details.AppendLine($"팔레트 {palletWidth:F2}m × {palletLength:F2}m · 배치 가능 {palletCount}개");
 
             foreach (var detection in _lastDetections)
             {
@@ -207,12 +216,14 @@ namespace ARLogistics.Features
                 int layers = plan.Layers, perPallet = plan.Total;
                 long warehouseTotal = (long)perPallet * palletCount;
 
-                result.AppendLine($"[{cargoName}{(fragile ? " · 파손주의" : "")}]");
-                result.AppendLine($"화물 크기 {cargoWidth:F2}m × {cargoLength:F2}m × {cargoHeight:F2}m");
-                result.AppendLine($"한 단에 {plan.PerLayer}개 · 최대 {layers}단 · 총 {perPallet}개");
-                result.AppendLine(plan.Message);
-                result.AppendLine($"창고 전체 적재 가능 수량: {warehouseTotal}개");
+                result.AppendLine($"인식 결과: {cargoName}{(fragile ? " · 파손주의" : "")}");
+                result.AppendLine($"신뢰도: {detection.confidence * 100f:F0}%");
+                result.AppendLine($"등록된 대표 규격: {cargoWidth * 100f:F0} × {cargoLength * 100f:F0} × {cargoHeight * 100f:F0}cm");
+                result.AppendLine($"팔레트당 적재량: {perPallet:N0}개");
+                result.AppendLine($"최대 적재 층수: {layers}층");
                 result.AppendLine();
+                details.AppendLine($"{cargoName}: 1층당 {plan.PerLayer}개 · {plan.Message}");
+                details.AppendLine($"창고 전체 예상 적재 가능 수량: {warehouseTotal:N0}개");
 
                 geminiLines.Add(
                     $"{cargoName}: {cargoWidth:F2}m×{cargoLength:F2}m×{cargoHeight:F2}m, " +
@@ -222,14 +233,16 @@ namespace ARLogistics.Features
             }
 
             _analysisSummary = result.ToString().TrimEnd();
-            SetAnalysis(_analysisSummary + "\n\n계산 완료 · Gemini 가이드 요청 중...");
+            SetClassification("분류 완료 · 계산 결과를 확인하세요");
+            SetAnalysis(_analysisSummary);
+            SetDetails(details.ToString().TrimEnd());
 
             if (!string.IsNullOrEmpty(geminiApiKey))
                 yield return CallGemini(geminiLines, warehouseArea, ceilingHeight, palletCount);
             else
             {
                 HideGeminiMessage();
-                SetAnalysis(_analysisSummary + "\n\n계산 완료");
+                SetAnalysis(_analysisSummary);
             }
 
             _analyzing = false;
@@ -267,13 +280,17 @@ namespace ARLogistics.Features
 
             if (request.result != UnityWebRequest.Result.Success)
             {
-                SetAnalysis(_analysisSummary + "\n\n계산 완료");
-                ShowGeminiMessage($"Gemini 오류\n{request.error}");
+                SetAnalysis(_analysisSummary);
+                ShowGeminiMessage(request.responseCode == 401
+                    ? "Gemini 인증 실패(401). 설정된 API 키와 해당 모델의 사용 권한을 확인해 주세요."
+                    : $"Gemini 오류\n{request.error}");
+                if (request.responseCode == 401)
+                    SetGeminiErrorDetails(request.error);
                 yield break;
             }
 
             string guidance = ParseGeminiText(request.downloadHandler.text);
-            SetAnalysis(_analysisSummary + "\n\n분석 완료");
+            SetAnalysis(_analysisSummary);
             ShowGeminiMessage(string.IsNullOrEmpty(guidance)
                 ? "Gemini가 별도 메시지를 반환하지 않았습니다."
                 : guidance);
@@ -293,6 +310,7 @@ namespace ARLogistics.Features
             SetDetectionEnabled(true);
             _boundingBoxOverlay?.ClearBoxes();
             HideGeminiMessage();
+            SetDetails("");
 
             if (analyzeButton != null)
                 analyzeButton.interactable = false;
@@ -330,7 +348,7 @@ namespace ARLogistics.Features
             panelRect.offsetMax = Vector2.zero;
 
             Image panelImage = geminiMessagePanel.GetComponent<Image>();
-            panelImage.color = new Color(0.03f, 0.07f, 0.16f, 0.82f);
+            panelImage.color = new Color(0.94f, 0.97f, 1f, 1f);
             panelImage.raycastTarget = false;
 
             CanvasGroup canvasGroup = geminiMessagePanel.GetComponent<CanvasGroup>();
@@ -350,7 +368,7 @@ namespace ARLogistics.Features
             geminiMessageText = textObject.GetComponent<Text>();
             geminiMessageText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             geminiMessageText.fontSize = 26;
-            geminiMessageText.color = Color.white;
+            geminiMessageText.color = new Color(0.075f, 0.14f, 0.23f, 1f);
             geminiMessageText.alignment = TextAnchor.UpperLeft;
             geminiMessageText.horizontalOverflow = HorizontalWrapMode.Wrap;
             geminiMessageText.verticalOverflow = VerticalWrapMode.Truncate;
@@ -360,17 +378,19 @@ namespace ARLogistics.Features
         private void ShowGeminiMessage(string message)
         {
             EnsureGeminiMessagePanel();
+            SetGeminiErrorDetails("");
             if (geminiMessageText != null)
                 geminiMessageText.text = "Gemini 분석 메시지\n\n" + message;
             if (geminiMessagePanel != null)
             {
                 geminiMessagePanel.SetActive(true);
-                geminiMessagePanel.transform.SetAsLastSibling();
+                UpdateResultHeight(geminiMessageText, 52f);
             }
         }
 
         private void HideGeminiMessage()
         {
+            SetGeminiErrorDetails("");
             if (geminiMessageText != null)
                 geminiMessageText.text = "";
             if (geminiMessagePanel != null)
@@ -395,6 +415,172 @@ namespace ARLogistics.Features
             actionBar.anchoredPosition = new Vector2(0f, navHeight + safeBottom + 12f);
             actionBar.sizeDelta = new Vector2(0f, 180f);
             actionBar.SetAsLastSibling();
+        }
+
+        private void SetupResultsLayout()
+        {
+            if (_resultsViewport != null || statusText == null || resultText == null)
+                return;
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas == null) return;
+
+            var viewport = new GameObject("MeasureResultsViewport", typeof(RectTransform), typeof(Image), typeof(ScrollRect), typeof(RectMask2D));
+            viewport.transform.SetParent(canvas.transform, false);
+            _resultsViewport = viewport.GetComponent<RectTransform>();
+            var background = viewport.GetComponent<Image>();
+            background.color = new Color(1f, 1f, 1f, 0.96f);
+            var border = viewport.AddComponent<Outline>();
+            border.effectColor = new Color(0.82f, 0.88f, 0.94f, 0.8f);
+            border.effectDistance = new Vector2(1f, -1f);
+            var content = new GameObject("MeasureResultsContent", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            content.transform.SetParent(viewport.transform, false);
+            _resultsContent = content.GetComponent<RectTransform>();
+            _resultsContent.anchorMin = new Vector2(0f, 1f);
+            _resultsContent.anchorMax = new Vector2(1f, 1f);
+            _resultsContent.pivot = new Vector2(0.5f, 1f);
+            _resultsContent.offsetMin = new Vector2(20f, 0f);
+            _resultsContent.offsetMax = new Vector2(-20f, 0f);
+            var layout = content.GetComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset(20, 20, 20, 20);
+            layout.spacing = 16f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+            content.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            var scroll = viewport.GetComponent<ScrollRect>();
+            scroll.content = _resultsContent;
+            scroll.viewport = _resultsViewport;
+            scroll.horizontal = false;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 35f;
+
+            PrepareResultText(statusText);
+            PrepareResultText(resultText);
+            var detailButtonObject = new GameObject("MeasureDetailsButton", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
+            detailButtonObject.transform.SetParent(_resultsContent, false);
+            detailButtonObject.GetComponent<Image>().color = new Color(0.94f, 0.97f, 1f, 1f);
+            detailButtonObject.GetComponent<LayoutElement>().preferredHeight = 52f;
+            _detailsButton = detailButtonObject.GetComponent<Button>();
+            var buttonLabel = new GameObject("Label", typeof(RectTransform), typeof(Text)).GetComponent<Text>();
+            buttonLabel.transform.SetParent(detailButtonObject.transform, false);
+            buttonLabel.rectTransform.anchorMin = Vector2.zero;
+            buttonLabel.rectTransform.anchorMax = Vector2.one;
+            buttonLabel.rectTransform.offsetMin = buttonLabel.rectTransform.offsetMax = Vector2.zero;
+            buttonLabel.font = statusText.font;
+            buttonLabel.fontSize = 25;
+            buttonLabel.color = new Color(0.09f, 0.39f, 0.78f, 1f);
+            buttonLabel.alignment = TextAnchor.MiddleCenter;
+            buttonLabel.text = "계산 근거 펼치기";
+            _detailsButton.onClick.AddListener(() =>
+            {
+                _detailsText.gameObject.SetActive(!_detailsText.gameObject.activeSelf);
+                buttonLabel.text = _detailsText.gameObject.activeSelf ? "계산 근거 접기" : "계산 근거 펼치기";
+            });
+            _detailsText = new GameObject("MeasureDetails", typeof(RectTransform), typeof(Text), typeof(LayoutElement)).GetComponent<Text>();
+            _detailsText.transform.SetParent(_resultsContent, false);
+            _detailsText.font = statusText.font;
+            _detailsText.fontSize = 24;
+            _detailsText.color = new Color(0.075f, 0.14f, 0.23f, 1f);
+            _detailsText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _detailsText.verticalOverflow = VerticalWrapMode.Overflow;
+            _detailsText.gameObject.SetActive(false);
+            detailButtonObject.SetActive(false);
+            if (geminiMessagePanel != null)
+            {
+                geminiMessagePanel.transform.SetParent(_resultsContent, false);
+                var panel = geminiMessagePanel.GetComponent<RectTransform>();
+                panel.localScale = Vector3.one;
+                if (geminiMessageText != null)
+                {
+                    geminiMessageText.horizontalOverflow = HorizontalWrapMode.Wrap;
+                    geminiMessageText.verticalOverflow = VerticalWrapMode.Overflow;
+                }
+                panel.gameObject.AddComponent<LayoutElement>().preferredHeight = 150f;
+            }
+            var errorButtonObject = new GameObject("GeminiErrorDetailsButton", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
+            errorButtonObject.transform.SetParent(_resultsContent, false);
+            errorButtonObject.GetComponent<Image>().color = new Color(0.94f, 0.97f, 1f, 1f);
+            errorButtonObject.GetComponent<LayoutElement>().preferredHeight = 48f;
+            _geminiErrorButton = errorButtonObject.GetComponent<Button>();
+            var errorLabel = new GameObject("Label", typeof(RectTransform), typeof(Text)).GetComponent<Text>();
+            errorLabel.transform.SetParent(errorButtonObject.transform, false);
+            errorLabel.rectTransform.anchorMin = Vector2.zero;
+            errorLabel.rectTransform.anchorMax = Vector2.one;
+            errorLabel.rectTransform.offsetMin = errorLabel.rectTransform.offsetMax = Vector2.zero;
+            errorLabel.font = statusText.font;
+            errorLabel.fontSize = 23;
+            errorLabel.color = new Color(0.09f, 0.39f, 0.78f, 1f);
+            errorLabel.alignment = TextAnchor.MiddleCenter;
+            errorLabel.text = "AI 오류 상세 펼치기";
+            _geminiErrorText = new GameObject("GeminiErrorDetails", typeof(RectTransform), typeof(Text), typeof(LayoutElement)).GetComponent<Text>();
+            _geminiErrorText.transform.SetParent(_resultsContent, false);
+            _geminiErrorText.font = statusText.font;
+            _geminiErrorText.fontSize = 23;
+            _geminiErrorText.color = new Color(0.075f, 0.14f, 0.23f, 1f);
+            _geminiErrorText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _geminiErrorText.verticalOverflow = VerticalWrapMode.Overflow;
+            _geminiErrorButton.onClick.AddListener(() =>
+            {
+                _geminiErrorText.gameObject.SetActive(!_geminiErrorText.gameObject.activeSelf);
+                errorLabel.text = _geminiErrorText.gameObject.activeSelf ? "AI 오류 상세 접기" : "AI 오류 상세 펼치기";
+            });
+            errorButtonObject.SetActive(false);
+            _geminiErrorText.gameObject.SetActive(false);
+            PositionResultsLayout();
+            viewport.transform.SetAsLastSibling();
+        }
+
+        private void PrepareResultText(Text text)
+        {
+            text.transform.SetParent(_resultsContent, false);
+            text.color = new Color(0.075f, 0.14f, 0.23f, 1f);
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.alignment = TextAnchor.UpperLeft;
+            text.gameObject.AddComponent<LayoutElement>();
+        }
+
+        private void PositionResultsLayout()
+        {
+            if (_resultsViewport == null) return;
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas == null) return;
+            float scale = Mathf.Max(0.01f, canvas.scaleFactor);
+            float safeBottom = Screen.safeArea.yMin / scale;
+            float navHeight = Mathf.Max(140f, GameObject.Find("NavBar")?.GetComponent<RectTransform>()?.rect.height ?? 140f);
+            float lower = safeBottom + navHeight + 204f;
+            float upper = Mathf.Max(lower + 120f, ((RectTransform)canvas.transform).rect.height * 0.52f);
+            _resultsViewport.anchorMin = _resultsViewport.anchorMax = Vector2.zero;
+            _resultsViewport.pivot = Vector2.zero;
+            _resultsViewport.anchoredPosition = new Vector2(24f, lower);
+            _resultsViewport.sizeDelta = new Vector2(((RectTransform)canvas.transform).rect.width - 48f, upper - lower);
+        }
+
+        private static void UpdateResultHeight(Text text, float extra)
+        {
+            if (text == null) return;
+            var element = text.GetComponent<LayoutElement>() ?? text.GetComponentInParent<LayoutElement>();
+            if (element != null)
+                element.preferredHeight = Mathf.Max(80f, text.preferredHeight + extra);
+        }
+
+        private void SetDetails(string message)
+        {
+            if (_detailsText == null || _detailsButton == null) return;
+            _detailsText.text = message;
+            _detailsButton.gameObject.SetActive(!string.IsNullOrEmpty(message));
+            _detailsText.gameObject.SetActive(false);
+            UpdateResultHeight(_detailsText, 20f);
+        }
+
+        private void SetGeminiErrorDetails(string message)
+        {
+            if (_geminiErrorButton == null || _geminiErrorText == null) return;
+            _geminiErrorText.text = message;
+            _geminiErrorText.gameObject.SetActive(false);
+            _geminiErrorButton.gameObject.SetActive(!string.IsNullOrEmpty(message));
+            UpdateResultHeight(_geminiErrorText, 16f);
         }
 
         private static void GetCargoSpec(
@@ -435,12 +621,14 @@ namespace ARLogistics.Features
         {
             if (statusText != null && statusText.text != message)
                 statusText.text = message;
+            UpdateResultHeight(statusText, 16f);
         }
 
         private void SetAnalysis(string message)
         {
             if (resultText != null && resultText.text != message)
                 resultText.text = message;
+            UpdateResultHeight(resultText, 16f);
         }
 
         private static string EscapeJson(string value) =>

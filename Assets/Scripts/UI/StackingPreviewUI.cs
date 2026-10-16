@@ -15,8 +15,9 @@ namespace ARLogistics.UI
         private ScrollRect scroll;
         private Text title;
         private Font font;
-        private static readonly Color Ink = new(0.035f, 0.065f, 0.11f, 0.97f);
-        private static readonly Color Blue = new(0.08f, 0.38f, 0.8f, 1f);
+        private static readonly Color Ink = new(0.075f, 0.14f, 0.23f, 1f);
+        private static readonly Color Blue = new(0.09f, 0.39f, 0.78f, 1f);
+        private static readonly Color Pale = new(0.94f, 0.97f, 1f, 1f);
 
         public void Build(Transform parent, Text status, Button place, Button clear, Action<StackOrientation> select)
         {
@@ -24,7 +25,10 @@ namespace ARLogistics.UI
             primary = place; reset = clear;
             font = status.font != null ? status.font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             card = status.transform.parent as RectTransform;
-            card.GetComponent<Image>().color = Ink;
+            card.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.97f);
+            var cardBorder = card.GetComponent<Outline>() ?? card.gameObject.AddComponent<Outline>();
+            cardBorder.effectColor = new Color(0.82f, 0.88f, 0.94f, 0.8f);
+            cardBorder.effectDistance = new Vector2(1f, -1f);
             title = Label(card, "Title", "적재 미리보기", 44);
             title.fontStyle = FontStyle.Bold;
             Anchor(title.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(28, -78), new Vector2(-28, -18));
@@ -37,6 +41,7 @@ namespace ARLogistics.UI
             Anchor(status.rectTransform, new Vector2(0, 1), Vector2.one, Vector2.zero, Vector2.zero);
             status.rectTransform.pivot = new Vector2(0.5f, 1);
             status.fontSize = 38;
+            status.color = Ink;
             status.resizeTextForBestFit = false;
             status.alignment = TextAnchor.UpperLeft;
             status.lineSpacing = 1.15f;
@@ -57,7 +62,7 @@ namespace ARLogistics.UI
             var handle = Rect("Handle", barRect);
             Anchor(handle, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             var handleImage = handle.gameObject.AddComponent<Image>();
-            handleImage.color = new Color(.4f, .65f, .95f, .8f);
+            handleImage.color = new Color(.54f, .68f, .84f, .85f);
             var bar = barRect.gameObject.AddComponent<Scrollbar>();
             bar.handleRect = handle; bar.targetGraphic = handleImage;
             bar.direction = Scrollbar.Direction.BottomToTop;
@@ -70,7 +75,7 @@ namespace ARLogistics.UI
                 int index = i;
                 var rect = Rect("Layout_" + i, row);
                 Anchor(rect, new Vector2(i / 3f, 0), new Vector2((i + 1) / 3f, 1), new Vector2(5, 0), new Vector2(-5, 0));
-                rect.gameObject.AddComponent<Image>().color = Ink;
+                rect.gameObject.AddComponent<Image>().color = Pale;
                 options[i] = rect.gameObject.AddComponent<Button>();
                 labels[i] = Label(rect, "Label", "", 32);
                 labels[i].alignment = TextAnchor.MiddleCenter;
@@ -78,7 +83,7 @@ namespace ARLogistics.UI
                 options[i].onClick.AddListener(() => select((StackOrientation)index));
             }
             StyleButton(primary, "상자 쌓기", false, Blue);
-            StyleButton(reset, "다시 배치", true, Ink);
+            StyleButton(reset, "다시 배치", true, Pale);
             Layout();
         }
 
@@ -99,9 +104,12 @@ namespace ARLogistics.UI
             string[] names = { "추천 배치", "기본 방향", "90° 회전" };
             for (int i = 0; i < 3; i++)
             {
-                labels[i].text = names[i] + (plans == null ? "\n측정 후 확인" : $"\n한 단 {plans[i].PerLayer}개 · 총 {plans[i].Total}개");
+                labels[i].text = names[i] + (plans == null ? "\n측정 후 확인" : $"\n1층 {plans[i].PerLayer}개 × {plans[i].Layers}층");
                 options[i].interactable = plans != null;
-                options[i].GetComponent<Image>().color = (int)selected == i ? Blue : Ink;
+                bool isSelected = (int)selected == i;
+                options[i].GetComponent<Image>().color = isSelected ? Blue : Pale;
+                labels[i].color = isSelected ? Color.white : Ink;
+                labels[i].fontStyle = isSelected ? FontStyle.Bold : FontStyle.Normal;
             }
         }
 
@@ -121,6 +129,7 @@ namespace ARLogistics.UI
             button.GetComponent<Image>().color = color;
             var text = button.GetComponentInChildren<Text>(true);
             text.text = caption; text.fontSize = 40; text.fontStyle = FontStyle.Bold;
+            text.color = color == Blue ? Color.white : Ink;
             text.resizeTextForBestFit = false; text.raycastTarget = false;
             Anchor(text.rectTransform, Vector2.zero, Vector2.one, new Vector2(70, 10), new Vector2(-10, -10));
             var icon = Rect("ActionIcon", button.transform);
@@ -153,11 +162,12 @@ namespace ARLogistics.UI
             line.sizeDelta = new Vector2((b - a).magnitude, 4);
             line.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(b.y - a.y, b.x - a.x) * Mathf.Rad2Deg);
             var image = line.gameObject.AddComponent<Image>(); image.raycastTarget = false;
+            image.color = parent.parent.GetComponent<Image>().color == Pale ? Ink : Color.white;
         }
         private Text Label(Transform parent, string name, string value, int size)
         {
             var label = Rect(name, parent).gameObject.AddComponent<Text>();
-            label.font = font; label.fontSize = size; label.color = Color.white; label.text = value;
+            label.font = font; label.fontSize = size; label.color = Ink; label.text = value;
             label.raycastTarget = false; return label;
         }
         private static RectTransform Rect(string name, Transform parent)

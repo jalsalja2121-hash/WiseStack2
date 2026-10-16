@@ -234,7 +234,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &278801995
 RectTransform:
   m_ObjectHideFlags: 0
@@ -309,7 +309,7 @@ GameObject:
   - component: {fileID: 289019252}
   - component: {fileID: 289019251}
   - component: {fileID: 289019250}
-  - component: {fileID: 289019256}
+  - component: {fileID: 289019257}
   m_Layer: 0
   m_Name: Canvas
   m_TagString: Untagged
@@ -324,7 +324,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 289019249}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 789af79182ec0204590249d5a2d6ef5a, type: 3}
   m_Name: 
@@ -436,7 +436,7 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
---- !u!114 &289019256
+--- !u!114 &289019257
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -445,14 +445,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 289019249}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3c2e444ac4d6a1c41953304a9c45540e, type: 3}
+  m_Script: {fileID: 11500000, guid: ccb57b735a71422b93c4ed59d496787d, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.UI.ARUIController
-  detectionText: {fileID: 0}
-  reportText: {fileID: 0}
-  reportPanel: {fileID: 0}
-  detectionTextTimeout: 3
-  waitingMessage: "\u23F3 Gemini \uBD84\uC11D \uC911..."
+  m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.UI.WarehouseRecommendationView
 --- !u!1 &550693457
 GameObject:
   m_ObjectHideFlags: 0
@@ -496,7 +491,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 550693457}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 462015c03f74a7c46b8467e45f00285f, type: 3}
   m_Name: 
@@ -922,7 +917,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.06, g: 0.06, b: 0.1, a: 0.88}
+  m_Color: {r: 0.07, g: 0.14, b: 0.23, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1393,7 +1388,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 0.9, b: 0.3, a: 1}
+  m_Color: {r: 0.94, g: 0.97, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1413,7 +1408,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "\U0001F50D \uC704\uD5D8 \uBD84\uC11D \uC911..."
+  m_Text: "\uCC3D\uACE0 \uC801\uC7AC \uCD94\uCC9C"
 --- !u!222 &1370834144
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1472,7 +1467,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 0.35, b: 0.35, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1492,7 +1487,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "\U0001F6A8 \uC704\uD5D8 \uC801\uC7AC \uBD84\uC11D"
+  m_Text: "\uCC3D\uACE0 \uC801\uC7AC \uCD94\uCC9C"
 --- !u!222 &1442917771
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1622,7 +1617,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1920098610
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1733,7 +1728,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &2086326708
 MonoBehaviour:
   m_ObjectHideFlags: 0
