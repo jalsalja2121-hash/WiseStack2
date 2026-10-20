@@ -43,7 +43,7 @@ namespace ARLogistics.Features
 
         [Header("Gemini")]
         [SerializeField] private string geminiApiKey = "";
-        [SerializeField] private string geminiModel = "gemini-3.5-flash";
+        [SerializeField] private string geminiModel = "gemini-3.8-flash";
 
         [Header("Detection")]
         [SerializeField] private float detectionInterval = 0.5f;
@@ -237,8 +237,9 @@ namespace ARLogistics.Features
             SetAnalysis(_analysisSummary);
             SetDetails(details.ToString().TrimEnd());
 
-            if (!string.IsNullOrEmpty(geminiApiKey))
-                yield return CallGemini(geminiLines, warehouseArea, ceilingHeight, palletCount);
+            string apiKey = GetGeminiApiKey();
+            if (!string.IsNullOrEmpty(apiKey))
+                yield return CallGemini(geminiLines, warehouseArea, ceilingHeight, palletCount, apiKey);
             else
             {
                 HideGeminiMessage();
@@ -250,11 +251,22 @@ namespace ARLogistics.Features
                 analyzeButton.interactable = false;
         }
 
+        private string GetGeminiApiKey()
+        {
+            if (!string.IsNullOrWhiteSpace(geminiApiKey))
+                return geminiApiKey.Trim();
+
+            // Kept out of Git; Resources includes the local key in an Android build.
+            TextAsset localKey = Resources.Load<TextAsset>("GeminiLocalKey");
+            return localKey != null ? localKey.text.Trim() : "";
+        }
+
         private IEnumerator CallGemini(
             List<string> productLines,
             float warehouseArea,
             float ceilingHeight,
-            int palletCount)
+            int palletCount,
+            string apiKey)
         {
             ShowGeminiMessage("Gemini가 적재 가이드를 분석하고 있습니다...");
 
@@ -269,7 +281,7 @@ namespace ARLogistics.Features
             string body = "{\"contents\":[{\"parts\":[{\"text\":\"" +
                           EscapeJson(prompt) + "\"}]}]}";
             string url = "https://generativelanguage.googleapis.com/v1beta/models/" +
-                         geminiModel + ":generateContent?key=" + geminiApiKey;
+                         geminiModel + ":generateContent?key=" + apiKey;
 
             using var request = new UnityWebRequest(url, "POST");
             request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
@@ -280,12 +292,21 @@ namespace ARLogistics.Features
 
             if (request.result != UnityWebRequest.Result.Success)
             {
+                string errorMessage = request.error ?? "";
+                string responseBody = request.downloadHandler?.text ?? "";
+                if (!string.IsNullOrEmpty(apiKey))
+                {
+                    errorMessage = errorMessage.Replace(apiKey, "[REDACTED]");
+                    responseBody = responseBody.Replace(apiKey, "[REDACTED]");
+                }
+
+                string errorDetails = $"HTTP {request.responseCode}\n{errorMessage}\n{responseBody}";
+                Debug.LogError($"[MeasureScene] Gemini request failed: {errorDetails}");
                 SetAnalysis(_analysisSummary);
                 ShowGeminiMessage(request.responseCode == 401
-                    ? "Gemini 인증 실패(401). 설정된 API 키와 해당 모델의 사용 권한을 확인해 주세요."
-                    : $"Gemini 오류\n{request.error}");
-                if (request.responseCode == 401)
-                    SetGeminiErrorDetails(request.error);
+                    ? "Gemini 인증 실패(401). AI 오류 상세에서 Google 응답을 확인해 주세요."
+                    : $"Gemini 오류\n{errorMessage}");
+                SetGeminiErrorDetails(errorDetails);
                 yield break;
             }
 

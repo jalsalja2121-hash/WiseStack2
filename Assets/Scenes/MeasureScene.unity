@@ -848,8 +848,10 @@ MonoBehaviour:
   resultText: {fileID: 362943907}
   analyzeButton: {fileID: 1504205253}
   clearButton: {fileID: 1191296560}
-  geminiApiKey: AQ.Ab8RN6JDmh6nu1AEs_pJTrubEhKsdVgV5YpFGmgLWcHyTLKxog
-  geminiModel: gemini-3.5-flash
+  geminiMessagePanel: {fileID: 0}
+  geminiMessageText: {fileID: 0}
+  geminiApiKey: ''
+  geminiModel: gemini-3.8-flash
   detectionInterval: 0.5
 --- !u!114 &872824842
 MonoBehaviour:
