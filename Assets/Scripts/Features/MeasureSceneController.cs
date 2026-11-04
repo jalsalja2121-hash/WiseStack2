@@ -55,6 +55,8 @@ namespace ARLogistics.Features
         private float _nextDetectionTime;
         private bool _analyzing;
         private bool _analysisComplete;
+        private bool _geminiFailed;
+        private string _analyzeButtonCaption;
 
         private string _savedMeasurementSummary = "";
         private string _analysisSummary = "";
@@ -64,13 +66,20 @@ namespace ARLogistics.Features
         private Button _detailsButton;
         private Button _geminiErrorButton;
         private Text _geminiErrorText;
+        private RectTransform _productHeader;
+        private Text _scanState;
+        private Rect _lastUiSafe;
+        private Vector2 _lastUiSize;
+        private float _lastResultHeight;
+        private bool _positioning;
 
         private void Awake()
         {
-            statusText ??= GameObject.Find("MS_StatusText")?.GetComponent<Text>();
-            resultText ??= GameObject.Find("MS_ResultText")?.GetComponent<Text>();
-            analyzeButton ??= GameObject.Find("MS_MeasureBtn")?.GetComponent<Button>();
-            clearButton ??= GameObject.Find("MS_ClearBtn")?.GetComponent<Button>();
+            statusText ??= WiseStackUI.Find<Text>(transform,"MS_StatusText");
+            resultText ??= WiseStackUI.Find<Text>(transform,"MS_ResultText");
+            analyzeButton ??= WiseStackUI.Find<Button>(transform,"MS_MeasureBtn");
+            clearButton ??= WiseStackUI.Find<Button>(transform,"MS_ClearBtn");
+            _analyzeButtonCaption = analyzeButton?.GetComponentInChildren<Text>(true)?.text;
             EnsureGeminiMessagePanel();
             _yolo = FindFirstObjectByType<YoloDetector>();
             _frameProvider = FindFirstObjectByType<CameraFrameProvider>();
@@ -84,11 +93,47 @@ namespace ARLogistics.Features
 
             PositionActionBarAboveNavigation();
             SetupResultsLayout();
+            BuildPresentation();
             SetClassification(_yolo != null
                 ? "분류 결과\n카메라로 화물을 비춰주세요"
                 : "분류 결과\nYoloDetector를 찾을 수 없습니다");
             SetAnalysis("분석 결과\n화물을 인식한 뒤 '분류하기'를 누르세요");
             HideGeminiMessage();
+        }
+
+        private void BuildPresentation()
+        {
+            WiseStackUI.Find<RectTransform>(transform,"TopBar")?.gameObject.SetActive(false);
+            _productHeader = WiseStackUI.Header(transform,"02 화물 인식  /  대표 규격 기준","화물을 카메라에 비춰주세요");
+            WiseStackUI.Surface(_productHeader,new Color(.078f,.14f,.23f,.94f));
+            _productHeader.GetComponent<VerticalLayoutGroup>().padding=new RectOffset(16,16,8,8);
+            foreach (var text in _productHeader.GetComponentsInChildren<Text>()) text.color=Color.white;
+            _scanState = WiseStackUI.Text(transform,"인식 대기  ·  화물 전체가 보이도록 비춰주세요",24,true,Color.white);
+            var strip=_scanState.rectTransform;
+            strip.anchorMin=new Vector2(0,.57f); strip.anchorMax=new Vector2(1,.57f);
+            strip.offsetMin=new Vector2(28,12); strip.offsetMax=new Vector2(-28,60);
+            WiseStackUI.StyleButton(analyzeButton,true,"분류·분석하기");
+            WiseStackUI.StyleButton(clearButton,false,"다시 인식");
+            _analyzeButtonCaption="분류·분석하기";
+            WiseStackUI.Navigation(transform,"MeasurementBtn");
+            PositionActionBarAboveNavigation(); PositionResultsLayout();
+        }
+
+        private void LateUpdate()
+        {
+            var canvas=GetComponentInParent<Canvas>(); if (canvas==null) return;
+            var size=((RectTransform)canvas.transform).rect.size;
+            if (_lastUiSafe!=Screen.safeArea || _lastUiSize!=size)
+            {
+                _lastUiSafe=Screen.safeArea; _lastUiSize=size;
+                PositionActionBarAboveNavigation(); PositionResultsLayout();
+            }
+            // Text heights must also follow wrapping after device or keyboard size changes.
+            foreach (var text in new[] { statusText,resultText,_detailsText,_geminiErrorText })
+                if (text!=null && text.gameObject.activeInHierarchy) UpdateResultHeight(text,8);
+            if (geminiMessageText!=null && geminiMessagePanel.activeSelf) UpdateResultHeight(geminiMessageText,40);
+            if (_resultsContent!=null && Mathf.Abs(_lastResultHeight-_resultsContent.rect.height)>1)
+            { _lastResultHeight=_resultsContent.rect.height; PositionResultsLayout(); }
         }
 
         private void OnRectTransformDimensionsChange()
@@ -142,6 +187,7 @@ namespace ARLogistics.Features
 
             _lastDetections.Clear();
             _lastDetections.AddRange(bestPerClass.Values);
+            if (_scanState!=null) { _scanState.text="화물 인식됨  ·  분류 결과를 확인하세요"; _scanState.color=Color.white; }
             _lastDetections.Sort((left, right) => left.classId.CompareTo(right.classId));
 
             var text = new StringBuilder();
@@ -161,6 +207,7 @@ namespace ARLogistics.Features
 
         private void StartAnalysis()
         {
+            if (_analysisComplete && !_geminiFailed) return;
             if (_lastDetections.Count == 0)
             {
                 SetAnalysis("분석 결과\n먼저 카메라로 화물을 인식해 주세요");
@@ -178,6 +225,9 @@ namespace ARLogistics.Features
         private IEnumerator AnalysisCoroutine()
         {
             _analyzing = true;
+            if (_scanState!=null) _scanState.text="분석 중  ·  잠시 기다려 주세요";
+            SetAnalyzeButtonCaption("분석 중…");
+            _geminiFailed = false;
             if (analyzeButton != null)
                 analyzeButton.interactable = false;
 
@@ -218,7 +268,8 @@ namespace ARLogistics.Features
 
                 result.AppendLine($"인식 결과: {cargoName}{(fragile ? " · 파손주의" : "")}");
                 result.AppendLine($"신뢰도: {detection.confidence * 100f:F0}%");
-                result.AppendLine($"등록된 대표 규격: {cargoWidth * 100f:F0} × {cargoLength * 100f:F0} × {cargoHeight * 100f:F0}cm");
+                result.AppendLine($"가로 {cargoWidth * 100f:F0} · 세로 {cargoLength * 100f:F0} · 높이 {cargoHeight * 100f:F0}cm");
+                result.AppendLine($"기준 무게 {cargoWeight:F2}kg · 분류별 추정값, 실측 아님");
                 result.AppendLine($"팔레트당 적재량: {perPallet:N0}개");
                 result.AppendLine($"최대 적재 층수: {layers}층");
                 result.AppendLine();
@@ -247,8 +298,10 @@ namespace ARLogistics.Features
             }
 
             _analyzing = false;
+            if (_scanState!=null) _scanState.text=_geminiFailed ? "AI 분석 실패  ·  계산 결과는 저장되었습니다" : "분류 완료  ·  대표 규격이 저장되었습니다";
+            if (!_geminiFailed) SetAnalyzeButtonCaption("분석 완료");
             if (analyzeButton != null)
-                analyzeButton.interactable = false;
+                analyzeButton.interactable = _geminiFailed;
         }
 
         private string GetGeminiApiKey()
@@ -292,6 +345,7 @@ namespace ARLogistics.Features
 
             if (request.result != UnityWebRequest.Result.Success)
             {
+                _geminiFailed = true;
                 string errorMessage = request.error ?? "";
                 string responseBody = request.downloadHandler?.text ?? "";
                 if (!string.IsNullOrEmpty(apiKey))
@@ -305,11 +359,15 @@ namespace ARLogistics.Features
                 SetAnalysis(_analysisSummary);
                 ShowGeminiMessage(request.responseCode == 401
                     ? "Gemini 인증 실패(401). AI 오류 상세에서 Google 응답을 확인해 주세요."
-                    : $"Gemini 오류\n{errorMessage}");
+                    : request.responseCode == 503
+                        ? "Gemini 서버가 일시적으로 바쁩니다 (503). 잠시 후 '다시 분석'을 눌러 주세요."
+                        : $"Gemini 오류\n{errorMessage}\n'다시 분석'을 눌러 재시도할 수 있습니다.");
                 SetGeminiErrorDetails(errorDetails);
+                SetAnalyzeButtonCaption("다시 분석");
                 yield break;
             }
 
+            SetAnalyzeButtonCaption(_analyzeButtonCaption);
             string guidance = ParseGeminiText(request.downloadHandler.text);
             SetAnalysis(_analysisSummary);
             ShowGeminiMessage(string.IsNullOrEmpty(guidance)
@@ -326,6 +384,9 @@ namespace ARLogistics.Features
             _analysisSummary = "";
             _analyzing = false;
             _analysisComplete = false;
+            _geminiFailed = false;
+            if (_scanState!=null) _scanState.text="인식 대기  ·  화물 전체가 보이도록 비춰주세요";
+            SetAnalyzeButtonCaption(_analyzeButtonCaption);
             _nextDetectionTime = 0f;
 
             SetDetectionEnabled(true);
@@ -346,6 +407,12 @@ namespace ARLogistics.Features
                 _frameProvider = FindFirstObjectByType<CameraFrameProvider>();
 
             _frameProvider?.SetInferenceEnabled(enabled);
+        }
+
+        private void SetAnalyzeButtonCaption(string caption)
+        {
+            Text label = analyzeButton?.GetComponentInChildren<Text>(true);
+            if (label != null && !string.IsNullOrEmpty(caption)) label.text = caption;
         }
 
         private void EnsureGeminiMessagePanel()
@@ -369,7 +436,7 @@ namespace ARLogistics.Features
             panelRect.offsetMax = Vector2.zero;
 
             Image panelImage = geminiMessagePanel.GetComponent<Image>();
-            panelImage.color = new Color(0.94f, 0.97f, 1f, 1f);
+            panelImage.color = WiseStackTheme.Pale;
             panelImage.raycastTarget = false;
 
             CanvasGroup canvasGroup = geminiMessagePanel.GetComponent<CanvasGroup>();
@@ -388,8 +455,8 @@ namespace ARLogistics.Features
 
             geminiMessageText = textObject.GetComponent<Text>();
             geminiMessageText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            geminiMessageText.fontSize = 34;
-            geminiMessageText.color = new Color(0.075f, 0.14f, 0.23f, 1f);
+            geminiMessageText.fontSize = 24;
+            geminiMessageText.color = WiseStackTheme.Navy;
             geminiMessageText.alignment = TextAnchor.UpperLeft;
             geminiMessageText.horizontalOverflow = HorizontalWrapMode.Wrap;
             geminiMessageText.verticalOverflow = VerticalWrapMode.Truncate;
@@ -420,21 +487,30 @@ namespace ARLogistics.Features
 
         private void PositionActionBarAboveNavigation()
         {
-            var actionBar = GameObject.Find("BottomBar")?.GetComponent<RectTransform>();
-            var navBar = GameObject.Find("NavBar")?.GetComponent<RectTransform>();
+            var actionBar = WiseStackUI.Find<RectTransform>(transform,"BottomBar");
+            var navBar = WiseStackUI.Find<RectTransform>(transform,"NavBar");
             var canvas = GetComponentInParent<Canvas>();
             if (actionBar == null || navBar == null || canvas == null)
                 return;
 
             Canvas.ForceUpdateCanvases();
             float safeBottom = Screen.safeArea.yMin / Mathf.Max(0.01f, canvas.scaleFactor);
-            float navHeight = Mathf.Max(140f, navBar.rect.height);
+            float navHeight = WiseStackTheme.NavigationHeight;
 
             actionBar.anchorMin = new Vector2(0f, 0f);
             actionBar.anchorMax = new Vector2(1f, 0f);
             actionBar.pivot = new Vector2(0.5f, 0f);
             actionBar.anchoredPosition = new Vector2(0f, navHeight + safeBottom + 12f);
-            actionBar.sizeDelta = new Vector2(0f, 180f);
+            actionBar.sizeDelta = new Vector2(0f, 112f);
+            var barImage=actionBar.GetComponent<Image>(); if (barImage!=null) barImage.color=Color.clear;
+            var safe=WiseStackUI.Insets(transform);
+            if (analyzeButton!=null && clearButton!=null)
+            {
+                var a=(RectTransform)analyzeButton.transform; a.anchorMin=Vector2.zero; a.anchorMax=new Vector2(.62f,1);
+                a.offsetMin=new Vector2(safe.x+24,8); a.offsetMax=new Vector2(-8,-8);
+                var b=(RectTransform)clearButton.transform; b.anchorMin=new Vector2(.62f,0); b.anchorMax=Vector2.one;
+                b.offsetMin=new Vector2(8,8); b.offsetMax=new Vector2(-safe.z-24,-8);
+            }
             actionBar.SetAsLastSibling();
         }
 
@@ -448,11 +524,7 @@ namespace ARLogistics.Features
             var viewport = new GameObject("MeasureResultsViewport", typeof(RectTransform), typeof(Image), typeof(ScrollRect), typeof(RectMask2D));
             viewport.transform.SetParent(canvas.transform, false);
             _resultsViewport = viewport.GetComponent<RectTransform>();
-            var background = viewport.GetComponent<Image>();
-            background.color = new Color(1f, 1f, 1f, 0.96f);
-            var border = viewport.AddComponent<Outline>();
-            border.effectColor = new Color(0.82f, 0.88f, 0.94f, 0.8f);
-            border.effectDistance = new Vector2(1f, -1f);
+            WiseStackUI.Surface(_resultsViewport,WiseStackTheme.Card);
             var content = new GameObject("MeasureResultsContent", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
             content.transform.SetParent(viewport.transform, false);
             _resultsContent = content.GetComponent<RectTransform>();
@@ -480,8 +552,8 @@ namespace ARLogistics.Features
             PrepareResultText(resultText);
             var detailButtonObject = new GameObject("MeasureDetailsButton", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             detailButtonObject.transform.SetParent(_resultsContent, false);
-            detailButtonObject.GetComponent<Image>().color = new Color(0.94f, 0.97f, 1f, 1f);
-            detailButtonObject.GetComponent<LayoutElement>().preferredHeight = 52f;
+            detailButtonObject.GetComponent<Image>().color = WiseStackTheme.Pale;
+            detailButtonObject.GetComponent<LayoutElement>().preferredHeight = 96f;
             _detailsButton = detailButtonObject.GetComponent<Button>();
             var buttonLabel = new GameObject("Label", typeof(RectTransform), typeof(Text)).GetComponent<Text>();
             buttonLabel.transform.SetParent(detailButtonObject.transform, false);
@@ -489,7 +561,7 @@ namespace ARLogistics.Features
             buttonLabel.rectTransform.anchorMax = Vector2.one;
             buttonLabel.rectTransform.offsetMin = buttonLabel.rectTransform.offsetMax = Vector2.zero;
             buttonLabel.font = statusText.font;
-            buttonLabel.fontSize = 34;
+            buttonLabel.fontSize = 26;
             buttonLabel.color = new Color(0.09f, 0.39f, 0.78f, 1f);
             buttonLabel.alignment = TextAnchor.MiddleCenter;
             buttonLabel.text = "계산 근거 펼치기";
@@ -501,7 +573,7 @@ namespace ARLogistics.Features
             _detailsText = new GameObject("MeasureDetails", typeof(RectTransform), typeof(Text), typeof(LayoutElement)).GetComponent<Text>();
             _detailsText.transform.SetParent(_resultsContent, false);
             _detailsText.font = statusText.font;
-            _detailsText.fontSize = 32;
+            _detailsText.fontSize = 24;
             _detailsText.color = new Color(0.075f, 0.14f, 0.23f, 1f);
             _detailsText.horizontalOverflow = HorizontalWrapMode.Wrap;
             _detailsText.verticalOverflow = VerticalWrapMode.Overflow;
@@ -521,8 +593,8 @@ namespace ARLogistics.Features
             }
             var errorButtonObject = new GameObject("GeminiErrorDetailsButton", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             errorButtonObject.transform.SetParent(_resultsContent, false);
-            errorButtonObject.GetComponent<Image>().color = new Color(0.94f, 0.97f, 1f, 1f);
-            errorButtonObject.GetComponent<LayoutElement>().preferredHeight = 48f;
+            errorButtonObject.GetComponent<Image>().color = WiseStackTheme.Pale;
+            errorButtonObject.GetComponent<LayoutElement>().preferredHeight = 96f;
             _geminiErrorButton = errorButtonObject.GetComponent<Button>();
             var errorLabel = new GameObject("Label", typeof(RectTransform), typeof(Text)).GetComponent<Text>();
             errorLabel.transform.SetParent(errorButtonObject.transform, false);
@@ -530,14 +602,14 @@ namespace ARLogistics.Features
             errorLabel.rectTransform.anchorMax = Vector2.one;
             errorLabel.rectTransform.offsetMin = errorLabel.rectTransform.offsetMax = Vector2.zero;
             errorLabel.font = statusText.font;
-            errorLabel.fontSize = 32;
+            errorLabel.fontSize = 26;
             errorLabel.color = new Color(0.09f, 0.39f, 0.78f, 1f);
             errorLabel.alignment = TextAnchor.MiddleCenter;
             errorLabel.text = "AI 오류 상세 펼치기";
             _geminiErrorText = new GameObject("GeminiErrorDetails", typeof(RectTransform), typeof(Text), typeof(LayoutElement)).GetComponent<Text>();
             _geminiErrorText.transform.SetParent(_resultsContent, false);
             _geminiErrorText.font = statusText.font;
-            _geminiErrorText.fontSize = 32;
+            _geminiErrorText.fontSize = 24;
             _geminiErrorText.color = new Color(0.075f, 0.14f, 0.23f, 1f);
             _geminiErrorText.horizontalOverflow = HorizontalWrapMode.Wrap;
             _geminiErrorText.verticalOverflow = VerticalWrapMode.Overflow;
@@ -555,8 +627,8 @@ namespace ARLogistics.Features
         private void PrepareResultText(Text text)
         {
             text.transform.SetParent(_resultsContent, false);
-            text.fontSize = 36;
-            text.color = new Color(0.075f, 0.14f, 0.23f, 1f);
+            text.fontSize = 26;
+            text.color = WiseStackTheme.Navy;
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             text.alignment = TextAnchor.UpperLeft;
@@ -565,18 +637,34 @@ namespace ARLogistics.Features
 
         private void PositionResultsLayout()
         {
-            if (_resultsViewport == null) return;
+            if (_resultsViewport == null || _positioning) return;
             var canvas = GetComponentInParent<Canvas>();
             if (canvas == null) return;
+            _positioning=true;
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_resultsContent);
             float scale = Mathf.Max(0.01f, canvas.scaleFactor);
             float safeBottom = Screen.safeArea.yMin / scale;
-            float navHeight = Mathf.Max(140f, GameObject.Find("NavBar")?.GetComponent<RectTransform>()?.rect.height ?? 140f);
-            float lower = safeBottom + navHeight + 204f;
-            float upper = Mathf.Max(lower + 120f, ((RectTransform)canvas.transform).rect.height * 0.58f);
+            float lower = safeBottom + WiseStackTheme.NavigationHeight + 140;
+            float maxHeight=Mathf.Max(120,((RectTransform)canvas.transform).rect.height*.57f-lower);
+            float resultHeight=Mathf.Min(maxHeight,Mathf.Max(220,_resultsContent.rect.height+8));
+            float upper=lower+resultHeight;
             _resultsViewport.anchorMin = _resultsViewport.anchorMax = Vector2.zero;
             _resultsViewport.pivot = Vector2.zero;
-            _resultsViewport.anchoredPosition = new Vector2(24f, lower);
-            _resultsViewport.sizeDelta = new Vector2(((RectTransform)canvas.transform).rect.width - 48f, upper - lower);
+            var safe=WiseStackUI.Insets(transform);
+            _resultsViewport.anchoredPosition = new Vector2(safe.x+24f, lower);
+            _resultsViewport.sizeDelta = new Vector2(((RectTransform)canvas.transform).rect.width-safe.x-safe.z-48f, upper - lower);
+            if (_productHeader!=null)
+            {
+                _productHeader.anchorMin=new Vector2(0,1); _productHeader.anchorMax=Vector2.one;
+                _productHeader.offsetMin=new Vector2(safe.x+24,-safe.w-120);
+                _productHeader.offsetMax=new Vector2(-safe.z-24,-safe.w-24);
+            }
+            if (_scanState!=null)
+            {
+                var strip=_scanState.rectTransform; strip.anchorMin=Vector2.zero; strip.anchorMax=new Vector2(1,0);
+                strip.offsetMin=new Vector2(safe.x+28,upper+16); strip.offsetMax=new Vector2(-safe.z-28,upper+68);
+            }
+            _positioning=false;
         }
 
         private static void UpdateResultHeight(Text text, float extra)
@@ -694,7 +782,7 @@ namespace ARLogistics.Features
                 out float height, out _, out _);
             string cargoName = ResolveCargoName(selected.classId);
 
-            _savedMeasurementSummary = $"상자 크기 저장 완료 · {width:F2}m × {depth:F2}m × {height:F2}m";
+            _savedMeasurementSummary = $"분류별 대표 규격 저장 · {width:F2}m × {depth:F2}m × {height:F2}m (실측값 아님)";
             BoxMeasurementStore.Save(width, depth, height, selected.classId, cargoName);
             Debug.Log($"[MeasureScene] 상자 크기 저장: {width:F3}m x {depth:F3}m x {height:F3}m ({cargoName})");
         }

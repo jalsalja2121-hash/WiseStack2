@@ -1,4 +1,5 @@
 using ARLogistics.Data;
+using ARLogistics.UI;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
@@ -11,7 +12,8 @@ namespace ARLogistics.Navigation
         private static readonly Color InactiveTabColor = new Color(0.14f, 0.23f, 0.34f, 1f);
         private GameObject measurementRequiredDialog;
         private RectTransform navigationRect;
-        private float lastSafeBottom = -1f;
+        private Rect lastNavigationSafe;
+        private Vector2 lastNavigationSize;
 
         private void Awake()
         {
@@ -40,29 +42,18 @@ namespace ARLogistics.Navigation
         {
             Canvas canvas = navigationRect.GetComponentInParent<Canvas>();
             if (canvas == null) return;
-            float bottom = Screen.safeArea.yMin / Mathf.Max(0.01f, canvas.scaleFactor);
-            if (Mathf.Abs(bottom - lastSafeBottom) < 0.5f) return;
-            lastSafeBottom = bottom;
-            Vector2 position = navigationRect.anchoredPosition;
-            position.y = navigationRect.rect.height * navigationRect.pivot.y + bottom;
-            navigationRect.anchoredPosition = position;
+            var size=((RectTransform)canvas.transform).rect.size;
+            if (lastNavigationSafe==Screen.safeArea && lastNavigationSize==size) return;
+            lastNavigationSafe=Screen.safeArea; lastNavigationSize=size;
+            RefreshActiveTab(navigationRect.gameObject);
         }
 
         private static void RefreshActiveTab(GameObject navBar)
         {
-            string scene = SceneManager.GetActiveScene().name;
-            foreach (var button in navBar.GetComponentsInChildren<Button>(true))
-            {
-                bool selected = (scene == "HomeScene" && button.name == "HomeBtn") ||
-                    (scene == "MeasureScene" && button.name == "MeasurementBtn") ||
-                    (scene == "ARMain" && button.name == "StackPreviewBtn") ||
-                    (scene == "DangerScene" && button.name == "DangerOverlayBtn");
-                var image = button.GetComponent<Image>();
-                if (image != null)
-                    image.color = selected ? ActiveTabColor : InactiveTabColor;
-                Text label = button.GetComponentInChildren<Text>(true);
-                if (label != null) label.fontSize = 36;
-            }
+            string scene = navBar.scene.name;
+            string selected = scene == "HomeScene" ? "HomeBtn" : scene == "MeasureScene" ? "MeasurementBtn" :
+                scene == "ARMain" ? "StackPreviewBtn" : "DangerOverlayBtn";
+            WiseStackUI.Navigation(navBar.transform.parent, selected);
         }
 
         private static void Wire(

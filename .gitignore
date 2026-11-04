@@ -18,6 +18,11 @@
 /[Bb]uilds/
 /[Ll]ogs/
 /[Uu]ser[Ss]ettings/
+/Artifacts/
+/Assets/_Recovery/
+/Assets/_Recovery.meta
+/codex_prompt.txt
+.idea/
 *.log
 
 # Local Gemini key used by MeasureScene; Unity includes this file in local builds.

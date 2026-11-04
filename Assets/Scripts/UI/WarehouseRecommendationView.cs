@@ -1,291 +1,404 @@
-using System.Collections.Generic;
+using System;
+using System.Collections;
 using System.Text;
 using ARLogistics.Data;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 namespace ARLogistics.UI
 {
+    /// <summary>Recommendation presentation only; all numbers come from the shared deterministic calculator.</summary>
     public sealed class WarehouseRecommendationView : MonoBehaviour
     {
-        private static readonly Color Blue = new(0.09f, 0.39f, 0.78f, 1f);
-        private static readonly Color Ink = new(0.055f, 0.10f, 0.17f, 1f);
-        private static readonly Color Pale = new(0.94f, 0.97f, 1f, 1f);
-        private RectTransform _content;
-        private RectTransform _viewport;
-        private readonly List<Text> _cardTexts = new();
+        private RectTransform _content, _viewport, _header, _nav;
+        private Canvas _canvas;
+        private ScrollRect _scroll;
         private Font _font;
-        private WarehouseStrategyComparison _comparison;
-        private WarehouseStrategy[] _strategies;
-        private Image[] _choiceImages;
-        private Text[] _choiceTexts;
-        private Text _summary;
-        private Text _detail;
+        private Rect _lastSafe;
+        private Vector2 _lastSize;
+        private static readonly string[] Names = { "A · 표준 적재", "B · 공간 효율", "C · 낮은 높이" };
 
-        private void Start()
+        private IEnumerator Start()
         {
-            Text title = GameObject.Find("TitleLbl")?.GetComponent<Text>();
-            if (title != null) { _font = title.font; title.text = "창고 적재 추천"; }
-            if (_font == null) _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            GameObject.Find("OverlayPanel")?.SetActive(false);
-            Build();
+            Initialize();
+            State("분석 중", "등록된 규격과 적재 조건을 비교하고 있습니다.");
+            yield return null;
             Refresh();
         }
 
-        private void Build()
+        private void Initialize()
         {
-            var viewport = Rect("RecommendationViewport", transform);
-            _viewport = viewport;
-            viewport.anchorMin = new Vector2(0.04f, 0f);
-            viewport.anchorMax = new Vector2(0.96f, 0.87f);
-            viewport.offsetMax = Vector2.zero;
-            PositionViewport();
-            viewport.gameObject.AddComponent<Image>().color = new Color(0.965f, 0.977f, 0.99f, 0.97f);
-            var scroll = viewport.gameObject.AddComponent<ScrollRect>();
-            scroll.horizontal = false;
-            scroll.vertical = true;
-            scroll.movementType = ScrollRect.MovementType.Clamped;
-            scroll.viewport = viewport;
-            viewport.gameObject.AddComponent<Mask>().showMaskGraphic = true;
-            _content = Rect("RecommendationContent", viewport);
+            if (_content != null) return;
+            _canvas = GetComponentInParent<Canvas>();
+            _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            foreach (var text in GetComponentsInChildren<Text>(true))
+                if (text.name == "TitleLbl")
+                {
+                    if (text.font != null) _font = text.font;
+                    text.gameObject.SetActive(false);
+                }
+            foreach (var rect in GetComponentsInChildren<RectTransform>(true))
+            {
+                if (rect.name == "OverlayPanel") rect.gameObject.SetActive(false);
+                if (rect.name == "NavBar") _nav = rect;
+            }
+            var background = GetComponent<Image>() ?? gameObject.AddComponent<Image>();
+            if (background != null) background.color = WiseStackTheme.Background;
+            var oldHeader = WiseStackUI.Find<RectTransform>(transform,"TopBar");
+            if (oldHeader != null) oldHeader.gameObject.SetActive(false);
+            _header = Rect("RecommendationHeader", transform);
+            _header.gameObject.AddComponent<Image>().color = WiseStackTheme.Background;
+            var heading = Label(_header, "최적의 적재 전략", 34, WiseStackTheme.Ink, true);
+            heading.alignment = TextAnchor.MiddleLeft;
+            Stretch(heading.rectTransform);
+            _viewport = Rect("RecommendationViewport", transform);
+            _viewport.gameObject.AddComponent<Image>().color = WiseStackTheme.Background;
+            _viewport.gameObject.AddComponent<RectMask2D>();
+            _scroll = _viewport.gameObject.AddComponent<ScrollRect>();
+            _scroll.horizontal = false;
+            _scroll.movementType = ScrollRect.MovementType.Clamped;
+            _scroll.viewport = _viewport;
+            _scroll.scrollSensitivity = 35;
+            _content = Rect("RecommendationContent", _viewport);
             _content.anchorMin = new Vector2(0, 1);
-            _content.anchorMax = new Vector2(1, 1);
+            _content.anchorMax = Vector2.one;
             _content.pivot = new Vector2(0.5f, 1);
-            _content.offsetMin = new Vector2(24, 0);
-            _content.offsetMax = new Vector2(-24, 0);
-            var layout = _content.gameObject.AddComponent<VerticalLayoutGroup>();
-            layout.spacing = 16;
-            layout.padding = new RectOffset(0, 0, 22, 24);
-            layout.childAlignment = TextAnchor.UpperLeft;
-            layout.childControlWidth = layout.childControlHeight = true;
-            layout.childForceExpandWidth = true;
-            layout.childForceExpandHeight = false;
+            _content.sizeDelta = Vector2.zero;
+            Vertical(_content, 14, 0);
             _content.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            scroll.content = _content;
-            scroll.scrollSensitivity = 35f;
-        }
-
-        private void OnRectTransformDimensionsChange()
-        {
-            if (_viewport != null) PositionViewport();
+            _scroll.content = _content;
+            Position();
         }
 
         private void LateUpdate()
         {
-            foreach (Text cardText in _cardTexts)
-            {
-                if (cardText == null) continue;
-                LayoutElement layout = cardText.transform.parent.GetComponent<LayoutElement>();
-                float requiredHeight = Mathf.Max(layout.minHeight, cardText.preferredHeight + 24f);
-                if (Mathf.Abs(layout.preferredHeight - requiredHeight) > 1f)
-                    layout.preferredHeight = requiredHeight;
-            }
+            if (_viewport == null) return;
+            var size = ((RectTransform)transform).rect.size;
+            if (_lastSafe != Screen.safeArea || _lastSize != size) Position();
         }
 
-        private void PositionViewport()
+        private void Position()
         {
-            Canvas canvas = GetComponent<Canvas>();
-            float scale = canvas != null ? Mathf.Max(0.01f, canvas.scaleFactor) : 1f;
-            float safeBottom = Screen.safeArea.yMin / scale;
-            float navHeight = GameObject.Find("NavBar")?.GetComponent<RectTransform>()?.rect.height ?? 140f;
-            float bottom = safeBottom + navHeight + 16f;
-            if (Mathf.Abs(_viewport.offsetMin.y - bottom) > 0.5f)
-                _viewport.offsetMin = new Vector2(0f, bottom);
+            PositionForScreen(Screen.safeArea, new Vector2(Screen.width, Screen.height));
+        }
+
+        private void PositionForScreen(Rect safeArea, Vector2 screenSize)
+        {
+            var canvasRect = (RectTransform)transform;
+            _lastSafe = safeArea;
+            _lastSize = canvasRect.rect.size;
+            float scale = _canvas != null ? Mathf.Max(.01f, _canvas.scaleFactor) : 1;
+            float bottom = safeArea.yMin / scale;
+            float top = (screenSize.y - safeArea.yMax) / scale;
+            float left = safeArea.xMin / scale;
+            float right = (screenSize.x - safeArea.xMax) / scale;
+            // Limit line length on tablets/landscape, while preserving the device's safe area.
+            float inset = Mathf.Max(24, (canvasRect.rect.width - left - right - 760) / 2);
+            _header.anchorMin = new Vector2(0, 1);
+            _header.anchorMax = Vector2.one;
+            _header.offsetMin = new Vector2(left + inset, -top - 84);
+            _header.offsetMax = new Vector2(-right - inset, -top);
+            float navHeight = 0;
+            if (_nav != null)
+            {
+                navHeight = WiseStackTheme.NavigationHeight;
+                _nav.anchorMin = Vector2.zero;
+                _nav.anchorMax = new Vector2(1, 0);
+                _nav.pivot = new Vector2(.5f, 0);
+                _nav.offsetMin = new Vector2(left, bottom);
+                _nav.offsetMax = new Vector2(-right, bottom + navHeight);
+                WiseStackUI.Navigation(transform,"DangerOverlayBtn");
+            }
+            _viewport.anchorMin = Vector2.zero;
+            _viewport.anchorMax = Vector2.one;
+            _viewport.offsetMin = new Vector2(left + inset, bottom + navHeight + 12);
+            _viewport.offsetMax = new Vector2(-right - inset, -top - 84);
+        }
+
+        private void Clear()
+        {
+            for (int i = _content.childCount - 1; i >= 0; i--)
+            {
+                var child = _content.GetChild(i).gameObject;
+                child.SetActive(false);
+                if (Application.isPlaying) Destroy(child);
+                else DestroyImmediate(child);
+            }
+            _scroll.StopMovement();
+            _scroll.verticalNormalizedPosition = 1;
+        }
+
+        private void State(string title, string message)
+        {
+            Clear();
+            var card = Card("RecommendationState");
+            Label(card, title, 32, WiseStackTheme.Navy, true);
+            Label(card, message, 26, WiseStackTheme.Muted);
         }
 
         private void Refresh()
         {
-            _cardTexts.Clear();
-            for (int i = _content.childCount - 1; i >= 0; i--) Destroy(_content.GetChild(i).gameObject);
-            if (!BoxMeasurementStore.TryGet(out BoxMeasurement cargo))
+            try
             {
-                WarehouseRecommendationStore.Clear();
-                Card("화물 정보 필요", "측정 화면에서 화물을 분류하고 규격을 저장한 뒤 다시 열어 주세요.", 145);
-                return;
+                if (!BoxMeasurementStore.TryGet(out _))
+                {
+                    WarehouseRecommendationStore.Clear();
+                    State("등록된 화물이 없습니다", "측정 탭에서 화물을 분류하고 규격을 저장해 주세요.");
+                    Button(_content, "측정하러 가기", () => SceneManager.LoadScene("MeasureScene"));
+                    return;
+                }
+                if (!WarehouseStrategySession.TryBuild(out var source, out var comparison, out string error))
+                {
+                    WarehouseRecommendationStore.Clear();
+                    State("입력 확인이 필요합니다", error);
+                    Button(_content, "홈에서 조건 확인", () => SceneManager.LoadScene("HomeScene"));
+                    return;
+                }
+                Present(source, comparison);
             }
-            if (cargo.ClassId < 0 || cargo.ClassId >= ProductSpecTable.ClassNames.Length)
+            catch (Exception exception)
             {
-                WarehouseRecommendationStore.Clear();
-                Card("화물 분류 확인", "저장된 화물 분류를 확인할 수 없습니다. 측정 화면에서 다시 분류해 주세요.", 145);
-                return;
+                Debug.LogException(exception, this);
+                State("분석을 완료하지 못했습니다", "잠시 후 다시 시도해 주세요.");
+                Button(_content, "다시 분석", Refresh);
             }
-            var spec = ProductSpecTable.Get(cargo.ClassId);
-            string cargoName = string.IsNullOrEmpty(cargo.SourceName)
-                ? ProductSpecTable.ClassName(cargo.ClassId) : cargo.SourceName;
-            if (!WarehouseRecommendationCalculator.TryCalculate(
-                AppSettings.WarehouseAreaM2, AppSettings.CeilingHeightM,
-                AppSettings.PalletWidth, AppSettings.PalletLength, AppSettings.PalletMaxLoadKg,
-                cargo, spec.WeightKg, cargoName, out WarehouseRecommendation baseline))
-            {
-                WarehouseRecommendationStore.Clear();
-                Card("입력값 확인", "창고 면적, 높이, 팔레트 조건과 화물 규격을 확인해 주세요.", 145);
-                return;
-            }
-            WarehouseRecommendationStore.Save(baseline);
-            _comparison = WarehouseStrategyCalculator.Calculate(baseline);
-            _strategies = new[] { _comparison.A, _comparison.B, _comparison.C };
-            Card("비교 조건", $"{cargoName} · {cargo.WidthM:F2} × {cargo.DepthM:F2} × {cargo.HeightM:F2}m\n창고 {baseline.WarehouseAreaM2:F1}㎡ · 팔레트 {_comparison.PalletCount:N0}개 배치 예상", 135);
-            _summary = Card("전체 창고 적용 예상량", "", 138);
-            SectionTitle("적재 전략 비교");
-            Choices();
-            _detail = Card("선택한 전략 상세", "", 400);
-            Select(_comparison.B.Available ? 1 : _comparison.A.Available ? 0 : _comparison.C.Available ? 2 : 1);
-
-            var basis = new StringBuilder();
-            basis.AppendLine($"창고 {baseline.WarehouseAreaM2:F1}㎡ · 높이 {baseline.CeilingHeightM:F2}m");
-            basis.AppendLine($"팔레트 {baseline.PalletWidthM:F2} × {baseline.PalletLengthM:F2}m · 최대 하중 {baseline.PalletMaxLoadKg:F0}kg");
-            basis.AppendLine($"{cargoName}: {cargo.WidthM:F2} × {cargo.DepthM:F2} × {cargo.HeightM:F2}m · 기준 무게 {spec.WeightKg:F2}kg");
-            basis.AppendLine($"통로·설비 20% 제외: {baseline.ExcludedAreaM2:F1}㎡ · 사용 가능 {baseline.UsableAreaM2:F1}㎡ · 팔레트 점유 {_comparison.OccupiedAreaM2:F1}㎡");
-            basis.AppendLine("정사각형 창고를 가정하고 남은 직사각형 전체에 팔레트를 배치했습니다. 실제 좌표나 통로 위치는 계산하지 않았습니다.");
-            basis.AppendLine($"이전 면적 분할 방식 참고값: {baseline.TotalCargoCapacity:N0}개. 전략별 예상량과 계산 범위가 달라 합산하지 않습니다.");
-            basis.AppendLine("화물 무게와 치수는 분류별 기준 예상값입니다. 바닥 하중, 포장 강도와 적재 안정성은 별도로 확인하세요.");
-            Details(basis.ToString());
-            LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
         }
 
-        private void Choices()
+        // Also used by isolated Editor previews: no stored measurements or API calls are changed.
+        public void Present(WarehouseRecommendation source, WarehouseStrategyComparison comparison)
         {
-            var row = Rect("StrategyChoices", _content);
-            Height(row, 176);
-            var layout = row.gameObject.AddComponent<HorizontalLayoutGroup>();
-            layout.spacing = 10;
-            layout.childControlWidth = layout.childControlHeight = true;
-            layout.childForceExpandWidth = layout.childForceExpandHeight = true;
-            _choiceImages = new Image[3];
-            _choiceTexts = new Text[3];
+            Initialize();
+            Clear();
+            var decision = WarehouseStrategyEvaluator.Evaluate(source, comparison);
+            if (!decision.HasRecommendation)
+            {
+                State("추천 가능한 전략이 없습니다", decision.Reason);
+                if (comparison != null)
+                    for (int i = 0; i < 3; i++)
+                        Label(_content, Names[i] + " · " + (decision.Evaluations[i]?.Exclusion ?? "배치 가능한 팔레트 없음"), 26, WiseStackTheme.Muted);
+                Button(_content, "홈에서 조건 확인", () => SceneManager.LoadScene("HomeScene"));
+                if (source != null && comparison != null) Details(source, comparison, decision);
+                return;
+            }
+            var winner = comparison.Get(decision.Index);
+            var hero = Card("RecommendedStrategy", true);
+            Label(hero, decision.RequiresLoadConfirmation ? "조건부 예상안 · 하중 확인 필요" : "분석 완료  ·  최종 추천", 22, WiseStackTheme.Success, true);
+            Label(hero, Names[decision.Index], 34, WiseStackTheme.Ink, true);
+            Label(hero, decision.Reason, 26, WiseStackTheme.Muted);
+            var metrics = Row(hero, "KeyMetrics", 12);
+            Metric(metrics, "팔레트당 예상", $"{winner.PerPallet:N0}개");
+            Metric(metrics, "적재 층수", $"{winner.Layers}층");
+            Metric(metrics, "팔레트 포함", $"{winner.StackHeightM:F2}m");
+            Label(hero, $"바닥면 활용률 {winner.FloorUtilizationPercent:F1}%", 24, WiseStackTheme.Muted);
+            Button(hero, "추천 전략 AR 보기", () =>
+            {
+                WarehouseStrategySession.OpenInAr(decision.Index);
+                SceneManager.LoadScene("ARMain");
+            });
+
+            var table = Card("StrategyComparison");
+            Label(table, "전략별 핵심 비교", 28, WiseStackTheme.Navy, true);
             for (int i = 0; i < 3; i++)
             {
-                int selected = i;
-                var block = Rect("Strategy" + i, row);
-                _choiceImages[i] = block.gameObject.AddComponent<Image>();
-                Border(block.gameObject);
-                block.gameObject.AddComponent<Button>().onClick.AddListener(() => Select(selected));
-                var label = Rect("Label", block);
-                label.anchorMin = Vector2.zero;
-                label.anchorMax = Vector2.one;
-                label.offsetMin = new Vector2(5, 5);
-                label.offsetMax = new Vector2(-5, -5);
-                var strategy = _strategies[i];
-                _choiceTexts[i] = Text(label,
-                    $"{strategy.Name}\n{(strategy.Available ? $"팔레트당 {strategy.PerPallet:N0}개" : "적재 불가")}", 32, Blue);
-                _choiceTexts[i].alignment = TextAnchor.MiddleCenter;
-                _choiceTexts[i].fontStyle = FontStyle.Bold;
+                var option = comparison.Get(i);
+                var evaluation = decision.Evaluations[i];
+                var row = Row(table, "Strategy" + i, 8);
+                var name = Rect("StrategyName", row); Flexible(name, 1.35f); Vertical(name, 3, 0);
+                Label(name, Names[i], 26, WiseStackTheme.Navy, true);
+                Label(name, option?.Orientation == StackOrientation.Rotated ? "90° 회전" : "기본 방향", 22, WiseStackTheme.Muted);
+                var count = Rect("Count", row); Flexible(count, 1); Vertical(count, 3, 0);
+                Label(count, evaluation.Eligible ? $"{option.PerPallet:N0}개" : "적재 불가", 28, WiseStackTheme.Navy, true);
+                Label(count, "팔레트당", 22, WiseStackTheme.Muted);
+                var height = Rect("Height", row); Flexible(height, 1); Vertical(height, 3, 0);
+                Label(height, evaluation.Eligible ? $"{option.StackHeightM:F2}m" : "—", 28, WiseStackTheme.Navy, true);
+                Label(height, evaluation.Eligible ? $"{option.Layers}층" : "제외", 22, WiseStackTheme.Muted);
+                var status = Label(row, i == decision.Index ? "추천" : !evaluation.Eligible ? "제외" :
+                    evaluation.EquivalentToWinner ? "동률" : "대안", 24,
+                    i == decision.Index ? WiseStackTheme.Blue : WiseStackTheme.Muted, true);
+                status.alignment = TextAnchor.MiddleRight;
+                Flexible(status.rectTransform, .65f);
+                Label(table, evaluation.Eligible
+                    ? $"바닥면 {option.FloorUtilizationPercent:F1}% · 높이 여유 {option.HeightReserveM:F2}m · " +
+                        (evaluation.LoadVerified ? "기준 무게로 하중 조건 충족" : "하중 확인 필요")
+                    : evaluation.Exclusion, 22, WiseStackTheme.Muted);
             }
+            var analysis = Card("StrategyTradeoffs");
+            Label(analysis, "선정 근거와 상충 관계", 28, WiseStackTheme.Navy, true);
+            Label(analysis, Tradeoffs(comparison, decision), 26, WiseStackTheme.Muted);
+            Details(source, comparison, decision);
+            Rebuild();
         }
 
-        private void Select(int index)
+        private static string Tradeoffs(WarehouseStrategyComparison comparison, WarehouseStrategyDecision decision)
         {
-            for (int i = 0; i < _choiceImages.Length; i++)
+            var winner = comparison.Get(decision.Index);
+            var text = new StringBuilder();
+            for (int i = 0; i < 3; i++)
             {
-                _choiceImages[i].color = i == index ? Blue : Pale;
-                _choiceTexts[i].color = i == index ? Color.white : Blue;
+                var evaluation = decision.Evaluations[i];
+                if (i == decision.Index || !evaluation.Eligible || evaluation.EquivalentToWinner) continue;
+                var other = comparison.Get(i);
+                string a = ((char)('A' + decision.Index)).ToString(), b = ((char)('A' + i)).ToString();
+                int count = winner.PerPallet - other.PerPallet;
+                float height = winner.StackHeightM - other.StackHeightM;
+                if (count > 0) text.Append($"{a}는 {b}보다 팔레트당 {count:N0}개 더 적재합니다. ");
+                else if (count < 0) text.Append($"{b}는 {a}보다 팔레트당 {-count:N0}개 더 적재합니다. ");
+                else text.Append($"{a}와 {b}의 적재 수량은 같습니다. ");
+                if (Mathf.Abs(height) > .001f)
+                    text.Append(height > 0 ? $"{b}는 높이가 {height:F2}m 낮습니다." : $"{a}는 높이가 {-height:F2}m 낮습니다.");
+                else text.Append("적재 높이도 같습니다.");
+                text.AppendLine();
             }
-            WarehouseStrategy strategy = _strategies[index];
-            _summary.text = strategy.Available
-                ? $"<b><color=#1764C7>전체 창고 적용 예상량</color></b>\n<size=38><b>{strategy.WarehouseCapacity:N0}개</b></size>\n선택한 전략을 전체 사용 가능 공간에 적용한 값"
-                : "<b><color=#1764C7>전체 창고 적용 예상량</color></b>\n현재 조건에서는 적재할 수 없습니다.";
-            if (!strategy.Available)
-            {
-                _detail.text = $"<b><color=#1764C7>{strategy.Name}</color></b>\n적재 불가\n{strategy.Message}";
-                return;
-            }
-            string orientation = strategy.Orientation == StackOrientation.Rotated ? "90° 회전" : "기본 방향";
-            string difference = index == 1 && _strategies[0].Available
-                ? $"\nA 대비 팔레트당 +{strategy.PerPallet - _strategies[0].PerPallet:N0}개" : "";
-            _detail.text = $"<b><color=#1764C7>{strategy.Name}</color></b>\n" +
-                $"적재 방향 {orientation} · 1층 {strategy.PerLayer:N0}개 × {strategy.Layers}층\n" +
-                $"팔레트당 {strategy.PerPallet:N0}개 · 예상 무게 {strategy.WeightKg:F1}kg\n" +
-                $"적재 높이 {strategy.StackHeightM:F2}m · 팔레트 바닥 사용률 {strategy.FloorUtilizationPercent:F1}%\n" +
-                $"전체 창고 적용 시 {strategy.WarehouseCapacity:N0}개 · 팔레트 {_comparison.PalletCount:N0}개" +
-                difference + $"\n{strategy.Message}";
+            text.Append("C는 B보다 한 층 낮추되 최소 1층을 유지합니다. 높이가 낮아지는 대신 수량이 줄어 수량 우선 정책에서는 일반적으로 선정되지 않습니다.");
+            return text.ToString().TrimEnd();
         }
 
-        private void Details(string value)
+        private void Details(WarehouseRecommendation source, WarehouseStrategyComparison comparison, WarehouseStrategyDecision decision)
         {
-            var root = Rect("RecommendationDetailsButton", _content);
-            Height(root, 58);
-            root.gameObject.AddComponent<Image>().color = Pale;
-            var button = root.gameObject.AddComponent<Button>();
-            var label = Text(Rect("Label", root), "계산 근거와 한계 펼치기", 36, Blue);
-            label.rectTransform.anchorMin = Vector2.zero;
-            label.rectTransform.anchorMax = Vector2.one;
-            label.rectTransform.offsetMin = label.rectTransform.offsetMax = Vector2.zero;
-            label.alignment = TextAnchor.MiddleCenter;
-            var panel = Rect("RecommendationDetails", _content);
-            Height(panel, 530);
-            panel.gameObject.AddComponent<Image>().color = Color.white;
-            Border(panel.gameObject);
-            var inner = Rect("Text", panel);
-            inner.anchorMin = Vector2.zero;
-            inner.anchorMax = Vector2.one;
-            inner.offsetMin = new Vector2(22, 12);
-            inner.offsetMax = new Vector2(-22, -12);
-            var detailText = Text(inner, value, 32, Ink);
-            detailText.verticalOverflow = VerticalWrapMode.Overflow;
-            Canvas.ForceUpdateCanvases();
-            panel.GetComponent<LayoutElement>().preferredHeight = Mathf.Max(300f, detailText.preferredHeight + 24f);
+            var toggle = Button(_content, "계산 근거와 한계 펼치기  +", null, false);
+            toggle.name = "RecommendationDetailsButton";
+            var panel = Card("RecommendationDetails");
+            Label(panel, "전략별 계산과 조건 확인", 28, WiseStackTheme.Navy, true);
+            for (int i = 0; i < 3; i++)
+            {
+                var evaluation = decision.Evaluations[i];
+                var option = comparison.Get(i);
+                Label(panel, Names[i] + " · " + (evaluation != null && evaluation.Eligible
+                    ? $"{option.Plan.Columns} × {option.Plan.Rows} × {option.Layers} = {option.PerPallet:N0}개\n" +
+                        $"바닥면 {option.FloorUtilizationPercent:F1}% · 공간 {option.SpaceUtilizationPercent:F1}%\n" +
+                        $"높이 {option.StackHeightM:F2}m · 여유 {option.HeightReserveM:F2}m\n" +
+                        (evaluation.LoadVerified ? $"화물 {option.WeightKg:F2}kg ≤ 허용 {source.PalletMaxLoadKg:F2}kg" : "무게 누락 · 하중 확인 필요")
+                    : evaluation?.Exclusion ?? "배치 불가"), 24, WiseStackTheme.Muted);
+            }
+            Label(panel, decision.Criteria, 24, WiseStackTheme.Muted);
+            Label(panel, "수량 N = 가로 개수 × 세로 개수 × 층수. 바닥면 활용률 = 한 층 화물 바닥면적 / 팔레트 면적. " +
+                "총 높이 = 0.15m + 층수 × 화물 높이 ≤ 유효 높이 한도. 높이 여유 = 한도 − 총 높이. " +
+                "공간 활용률 = 화물 총부피 / (팔레트 면적 × (한도 − 0.15m)). " +
+                "화물 하중 = 수량 × 개당 기준 무게 ≤ 허용하중 (팔레트 자체 중량 제외). 활용률은 백분율로 표시합니다.", 24, WiseStackTheme.Muted);
+            var basis = new StringBuilder();
+            basis.AppendLine($"창고 {source.WarehouseAreaM2:N1}㎡ · 천장 {source.CeilingHeightM:F2}m");
+            basis.AppendLine($"팔레트 {source.PalletWidthM:F2} × {source.PalletLengthM:F2}m · 최대 하중 {source.PalletMaxLoadKg:N1}kg");
+            basis.AppendLine($"{source.CargoName}: {source.Cargo.WidthM:F2} × {source.Cargo.DepthM:F2} × {source.Cargo.HeightM:F2}m · " +
+                (source.AssumedCargoWeightKg > 0 ? $"기준 무게 {source.AssumedCargoWeightKg:F2}kg" : "무게 미등록"));
+            if (decision.HasRecommendation)
+            {
+                var winner = comparison.Get(decision.Index);
+                basis.AppendLine(decision.RequiresLoadConfirmation ? "선정안 하중 확인 필요" : $"선정안 하중 {winner.WeightKg:N1}kg · 바닥 사용률 {winner.FloorUtilizationPercent:F1}%");
+                basis.AppendLine($"창고 전체 예상 적재량: 약 {winner.WarehouseCapacity:N0}개");
+                basis.AppendLine($"예상 팔레트 {comparison.PalletCount:N0}개 × 팔레트당 {winner.PerPallet:N0}개");
+            }
+            basis.AppendLine($"통로·설비 20% 제외 ({source.ExcludedAreaM2:N1}㎡), 사용 가능 {source.UsableAreaM2:N1}㎡.");
+            basis.AppendLine("정사각형 창고의 한쪽 깊이 20%를 제외한 직사각형에 팔레트를 배치한 개략치입니다. 창고 형상 및 통로 배치에 따라 실제 적재량은 달라질 수 있습니다.");
+            basis.Append("무게는 화물 분류별 기준값입니다. 기둥·출입구·재고량·바닥 하중·포장 강도·결속·전도 위험은 반영하지 않았습니다. 낮은 높이가 안전성을 보장하지 않습니다.");
+            Label(panel, "입력과 계산 범위", 28, WiseStackTheme.Navy, true);
+            Label(panel, basis.ToString(), 24, WiseStackTheme.Muted);
+            Label(panel, "ISO 6780(치수), ISO 8611(하중 시험), CTU Code(적재·고정)를 참고한 조건 검토입니다. " +
+                "기하학적 예상치이며 국제표준 준수·인증이나 실제 안전성을 보증하지 않습니다. 하중 분포·무게중심·고정 상태는 검증하지 않습니다.", 24, WiseStackTheme.Muted);
             panel.gameObject.SetActive(false);
-            button.onClick.AddListener(() =>
+            toggle.onClick.AddListener(() =>
             {
-                panel.gameObject.SetActive(!panel.gameObject.activeSelf);
-                label.text = panel.gameObject.activeSelf ? "계산 근거와 한계 접기" : "계산 근거와 한계 펼치기";
+                bool expanded = !panel.gameObject.activeSelf;
+                panel.gameObject.SetActive(expanded);
+                toggle.GetComponentInChildren<Text>().text = expanded ? "계산 근거와 한계 접기  −" : "계산 근거와 한계 펼치기  +";
+                Rebuild();
             });
         }
 
-        private Text Card(string title, string body, float height)
+        private void Rebuild()
         {
-            var card = Rect(title + "Card", _content);
-            Height(card, height);
-            card.GetComponent<LayoutElement>().minHeight = height;
-            card.gameObject.AddComponent<Image>().color = Color.white;
-            Border(card.gameObject);
-            var inner = Rect("Text", card);
-            inner.anchorMin = Vector2.zero;
-            inner.anchorMax = Vector2.one;
-            inner.offsetMin = new Vector2(22, 12);
-            inner.offsetMax = new Vector2(-22, -12);
-            Text cardText = Text(inner, $"<b><color=#1764C7>{title}</color></b>\n{body}", 32, Ink);
-            cardText.verticalOverflow = VerticalWrapMode.Overflow;
-            _cardTexts.Add(cardText);
-            return cardText;
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
         }
 
-        private void SectionTitle(string value)
+        private RectTransform Card(string name, bool featured = false)
         {
-            var root = Rect("SectionTitle", _content);
-            Height(root, 44);
-            Text(root, value, 40, Blue).fontStyle = FontStyle.Bold;
+            var root = Rect(name, _content);
+            WiseStackUI.Surface(root,WiseStackTheme.Card);
+            Vertical(root, 16, 24);
+            return root;
         }
 
-        private Text Text(RectTransform root, string value, int size, Color color)
+        private void Metric(Transform parent, string caption, string value)
         {
+            var root = Rect("Metric", parent);
+            Flexible(root, 1);
+            WiseStackUI.Surface(root,WiseStackTheme.Background);
+            Vertical(root, 5, 12);
+            Label(root, value, 32, WiseStackTheme.Navy, true);
+            Label(root, caption, 22, WiseStackTheme.Muted);
+        }
+
+        private Button Button(Transform parent, string caption, UnityEngine.Events.UnityAction action, bool primary = true)
+        {
+            var root = Rect("RecommendationAction", parent);
+            var element = root.gameObject.AddComponent<LayoutElement>();
+            element.minHeight = 96;
+            var image = root.gameObject.AddComponent<Image>();
+            image.color = primary ? WiseStackTheme.Blue : WiseStackTheme.Pale;
+            var button = root.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            Vertical(root, 0, 14);
+            var label = Label(root, caption, 28, primary ? Color.white : WiseStackTheme.Blue, true);
+            label.alignment = TextAnchor.MiddleCenter;
+            WiseStackUI.StyleButton(button,primary);
+            if (action != null) button.onClick.AddListener(action);
+            return button;
+        }
+
+        private Text Label(Transform parent, string value, int size, Color color, bool bold = false)
+        {
+            var root = Rect("Label", parent);
             var text = root.gameObject.AddComponent<Text>();
-            text.font = _font;
-            text.fontSize = size;
-            text.color = color;
-            text.text = value;
+            text.font = _font; text.fontSize = size; text.color = color; text.text = value;
+            text.fontStyle = bold ? FontStyle.Bold : FontStyle.Normal;
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Truncate;
-            text.supportRichText = true;
+            text.supportRichText = false;
             text.raycastTarget = false;
             return text;
         }
 
+        private static void Vertical(RectTransform root, float spacing, int padding)
+        {
+            var group = root.gameObject.AddComponent<VerticalLayoutGroup>();
+            group.spacing = spacing;
+            group.padding = new RectOffset(padding, padding, padding, padding);
+            group.childControlWidth = group.childControlHeight = true;
+            group.childForceExpandWidth = true;
+            group.childForceExpandHeight = false;
+            group.childAlignment = TextAnchor.MiddleLeft;
+        }
+
+        private static RectTransform Row(Transform parent, string name, float spacing)
+        {
+            var root = Rect(name, parent);
+            var group = root.gameObject.AddComponent<HorizontalLayoutGroup>();
+            group.spacing = spacing;
+            group.childControlWidth = group.childControlHeight = true;
+            group.childForceExpandWidth = true;
+            group.childForceExpandHeight = false;
+            group.childAlignment = TextAnchor.MiddleLeft;
+            return root;
+        }
+
+        private static void Flexible(RectTransform root, float weight)
+        {
+            var layout = root.gameObject.AddComponent<LayoutElement>();
+            layout.minWidth = 0; layout.preferredWidth = 0; layout.flexibleWidth = weight;
+        }
+
         private static RectTransform Rect(string name, Transform parent)
         {
-            var root = (RectTransform)new GameObject(name, typeof(RectTransform)).transform;
+            var root = new GameObject(name, typeof(RectTransform)).GetComponent<RectTransform>();
             root.SetParent(parent, false);
             return root;
         }
 
-        private static void Height(RectTransform root, float height) =>
-            root.gameObject.AddComponent<LayoutElement>().preferredHeight = height;
-
-        private static void Border(GameObject target)
+        private static void Stretch(RectTransform root)
         {
-            var border = target.AddComponent<Outline>();
-            border.effectColor = new Color(0.82f, 0.88f, 0.94f, 0.8f);
-            border.effectDistance = new Vector2(1f, -1f);
+            root.anchorMin = Vector2.zero; root.anchorMax = Vector2.one;
+            root.offsetMin = root.offsetMax = Vector2.zero;
         }
     }
 }

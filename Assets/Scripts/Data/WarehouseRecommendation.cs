@@ -56,7 +56,7 @@ namespace ARLogistics.Data
             result = null;
             if (!Valid(warehouseAreaM2) || !Valid(ceilingHeightM) ||
                 !Valid(palletWidthM) || !Valid(palletLengthM) ||
-                !Valid(cargoWeightKg) || !Valid(cargo.WidthM) ||
+                float.IsNaN(cargoWeightKg) || float.IsInfinity(cargoWeightKg) || cargoWeightKg < 0 || !Valid(cargo.WidthM) ||
                 !Valid(cargo.DepthM) || !Valid(cargo.HeightM) ||
                 float.IsNaN(palletMaxLoadKg) || float.IsInfinity(palletMaxLoadKg) ||
                 palletMaxLoadKg < 0f || warehouseAreaM2 > 1000000f)

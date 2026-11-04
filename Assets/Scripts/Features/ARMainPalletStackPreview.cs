@@ -69,7 +69,10 @@ namespace ARLogistics.Features
         private int displayedBoxCount;
         private float palletTopHeight;
         private StackingPreviewUI ui;
-        private StackOrientation orientation;
+        private int selectedStrategyIndex;
+        private WarehouseStrategyComparison comparison;
+        private WarehouseStrategy strategy;
+        private bool openedFromRecommendation;
         private StackingPlan plan;
         private GameObject heightGuide;
         private Rect lastSafeArea;
@@ -88,6 +91,10 @@ namespace ARLogistics.Features
 
         private void OnEnable()
         {
+            int requestedStrategy = WarehouseStrategySession.ConsumeArStrategy();
+            openedFromRecommendation = requestedStrategy >= 0 && requestedStrategy < 3;
+            selectedStrategyIndex = requestedStrategy >= 0 && requestedStrategy < 3
+                ? requestedStrategy : 0;
             restoreInferenceOnDisable = cameraFrameProvider != null && cameraFrameProvider.IsInferenceEnabled;
             cameraFrameProvider?.SetInferenceEnabled(false);
             placeButton?.onClick.AddListener(EnablePlacement);
@@ -172,12 +179,13 @@ namespace ARLogistics.Features
             displayedBoxCount = 0;
             palletTopHeight = palletHeight;
             placementEnabled = true;
-            orientation = StackOrientation.Recommended;
             if (TryLoadMeasurement(false)) { RefreshPlan(); ShowSummary(); }
             else
             {
                 plan = null;
-                ui?.ShowPlans(null, orientation);
+                comparison = null;
+                strategy = null;
+                ui?.ShowStrategies(null, selectedStrategyIndex);
                 ui?.SetAction("측정이 필요해요", false);
                 ui?.SetTitle("먼저 상자를 확인해 주세요");
                 SetStatus("하단의 측정 화면에서 화물을 인식해 주세요.\n측정 결과를 저장하면 여기서 적재 모습을 확인할 수 있어요.");
@@ -186,15 +194,22 @@ namespace ARLogistics.Features
 
         private void TryPlacePallet(Vector2 screenPosition)
         {
-            if (raycastManager == null) { SetStatus("바닥을 인식할 준비가 되지 않았어요. 카메라 상태를 확인해 주세요."); return; }
+            if (raycastManager == null)
+            {
+                ui?.SetTitle("AR 준비 오류");
+                SetStatus("바닥을 인식할 준비가 되지 않았어요. 카메라 상태를 확인해 주세요.");
+                return;
+            }
             raycastHits.Clear();
             if (!raycastManager.Raycast(screenPosition, raycastHits, TrackableType.PlaneWithinPolygon))
             {
+                ui?.SetTitle("바닥 인식 중");
                 SetStatus("카메라를 천천히 움직여 바닥을 비춰 주세요. 바닥이 인식되면 놓을 위치를 터치해 주세요.");
                 return;
             }
             if (!TrySelectHorizontalFloorHit(out ARRaycastHit floorHit))
             {
+                ui?.SetTitle("평평한 바닥 필요");
                 SetStatus("벽 대신 평평한 바닥을 선택해 주세요.");
                 return;
             }
@@ -202,6 +217,7 @@ namespace ARLogistics.Features
             Pose hitPose = floorHit.pose;
             CreatePallet(new Pose(hitPose.position, GetHorizontalFacingRotation(hitPose.rotation)));
             placementEnabled = false;
+            ui?.SetTitle("팔레트 배치 완료 · 상자 생성 중");
             GenerateStackPreview();
         }
 
@@ -305,7 +321,7 @@ namespace ARLogistics.Features
                     ? $"\n화면에는 {visualBoxCount:N0}개만 표시해요. 계산 수량은 {totalPreviewBoxes:N0}개예요."
                     : string.Empty);
 
-            ui?.SetAction("처음부터 보기", true);
+            ui?.SetAction("배치 중…", false);
             ui?.SetTitle("아래에서부터 쌓고 있어요");
             SetStatus(finalStatus);
             spawnBoxesRoutine = StartCoroutine(
@@ -366,7 +382,8 @@ namespace ARLogistics.Features
             }
 
             spawnBoxesRoutine = null;
-            ui?.SetTitle("적재 미리보기");
+            ui?.SetTitle("AR 배치 완료");
+            ui?.SetAction("다시 쌓기", true);
             if (displayedBoxCount != visualBoxCount || activeBoxes.Count != visualBoxCount)
                 Debug.LogError($"[ARMain] 적재 미리보기 수량 불일치: 표시 예정 {visualBoxCount}, 생성 {displayedBoxCount}, 활성 {activeBoxes.Count}", this);
             SetStatus(finalStatus + $"\nAR에 표시된 상자 {activeBoxes.Count:N0}개");
@@ -377,22 +394,26 @@ namespace ARLogistics.Features
             palletWidth = AppSettings.PalletWidth;
             palletLength = AppSettings.PalletLength;
             palletHeight = StackingCalculator.PalletHeight;
-            var plans = new StackingPlan[3];
-            float weight = ProductSpecTable.Get(currentMeasurement.ClassId).WeightKg;
-            for (int i = 0; i < plans.Length; i++)
-                plans[i] = StackingCalculator.Calculate(currentMeasurement.WidthM, currentMeasurement.DepthM,
-                    currentMeasurement.HeightM, weight, palletWidth, palletLength,
-                    AppSettings.CeilingHeightM, AppSettings.PalletMaxLoadKg, (StackOrientation)i);
-            plan = plans[(int)orientation];
+            if (!WarehouseStrategySession.TryBuild(out _, out comparison, out string error))
+            {
+                comparison = null;
+                strategy = null;
+                plan = new StackingPlan { Message = error };
+                ui?.ShowStrategies(null, selectedStrategyIndex);
+                return;
+            }
+            strategy = comparison.Get(selectedStrategyIndex);
+            plan = strategy.Plan;
             EstimatedCapacity = plan.Total;
             RemainingSpacePercent = 100 - plan.Utilization;
-            ui?.ShowPlans(plans, orientation);
+            ui?.ShowStrategies(comparison, selectedStrategyIndex);
         }
 
-        private void SelectLayout(StackOrientation selected)
+        private void SelectLayout(int selected)
         {
             if (!hasMeasurement) return;
-            orientation = selected;
+            openedFromRecommendation = false;
+            selectedStrategyIndex = selected;
             RefreshPlan();
             if (palletTransform != null && plan.Total > 0) GenerateStackPreview();
             else { ClearBoxes(); if (heightGuide != null) Destroy(heightGuide); ShowSummary(); }
@@ -402,18 +423,24 @@ namespace ARLogistics.Features
         {
             string size = $"등록 규격 {currentMeasurement.WidthM * 100:F0} × {currentMeasurement.DepthM * 100:F0} × {currentMeasurement.HeightM * 100:F0}cm";
             if (plan.Total == 0) return size + "\n\n" + plan.Message + "\n방향을 바꾸거나 홈에서 적재 조건을 확인해 주세요.";
-            string selected = orientation == StackOrientation.Recommended ? "추천 배치" :
-                orientation == StackOrientation.Original ? "기본 방향" : "90° 회전";
-            return $"<b>현재 선택 배치: {selected}</b>\n" +
+            string direction = strategy.Orientation == StackOrientation.Rotated ? "90° 회전" : "기본 방향";
+            string origin = openedFromRecommendation ? "최종 추천 전략을 AR로 확인 중\n" : "";
+            return origin + $"<b>{strategy.Name} · {direction}</b>\n" +
                 $"1층당 {plan.PerLayer:N0}개 × {plan.Layers}층 = 총 {plan.Total:N0}개\n" +
-                $"전체 높이 {plan.StackHeight:F2}m · 화물 무게 {plan.TotalWeight:F1}kg\n" +
-                $"바닥 사용률 {plan.Utilization:F0}%\n" + size + "\n" + plan.Message +
+                $"전체 높이 {plan.StackHeight:F2}m · " +
+                (plan.LoadVerified ? $"화물 기준 무게 {plan.TotalWeight:F1}kg\n" : "무게 누락 · 하중 확인 필요\n") +
+                $"바닥 사용률 {plan.Utilization:F0}% · 창고 예상 {strategy.WarehouseCapacity:N0}개\n" +
+                size + "\n" + strategy.Message +
                 "\n실제 적재 전 포장 강도·결속을 확인하세요.";
         }
 
         private void ShowSummary()
         {
-            ui?.SetTitle(plan.Total > 0 ? "어떻게 쌓을지 확인해 보세요" : "지금 조건으로는 쌓기 어려워요");
+            ui?.SetTitle(plan.Total > 0
+                ? (palletTransform == null
+                    ? (openedFromRecommendation ? "추천 전략 · 바닥 인식 전" : "바닥 인식 전 · 전략 선택")
+                    : "전략 배치 준비")
+                : "지금 조건으로는 쌓기 어려워요");
             ui?.SetAction(palletTransform == null ? "바닥에 배치" : "상자 쌓기", plan.Total > 0);
             SetStatus(SummaryText() + (plan.Total > 0 && palletTransform == null ? "\n\n" + PlacementMessage : ""));
         }

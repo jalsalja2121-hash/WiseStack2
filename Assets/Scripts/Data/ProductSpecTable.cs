@@ -176,6 +176,10 @@ namespace ARLogistics.Data
         /// <summary>
         /// classId + size_id 로 스펙 조회. 없으면 해당 classId의 size_id=3(중형) 반환.
         /// </summary>
+        // Recommendation must not treat the generic fallback weight as measured data.
+        public static float RecommendationWeightKg(int classId) =>
+            _table.TryGetValue(classId * 10 + 3, out var spec) ? spec.WeightKg : 0f;
+
         public static Spec Get(int classId, int sizeId = 3)
         {
             int key = classId * 10 + sizeId;

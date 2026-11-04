@@ -162,7 +162,13 @@ public static class StackingUIReview
             ui.Build(panel, status, Button(panel, "Place"), Button(panel, "Reset"), _ => { });
             var plans = new StackingPlan[3];
             for (int i = 0; i < 3; i++) plans[i] = StackingCalculator.Calculate(.35f, .48f, .315f, 3.008f, 1.2f, 1, 100, 1000, (StackOrientation)i);
-            ui.ShowPlans(plans, StackOrientation.Recommended);
+            var comparison = new WarehouseStrategyComparison
+            {
+                A = ReviewStrategy("A", StackOrientation.Recommended, plans[0]),
+                B = ReviewStrategy("B", StackOrientation.Original, plans[1]),
+                C = ReviewStrategy("C", StackOrientation.Rotated, plans[2])
+            };
+            ui.ShowStrategies(comparison, 0);
             ui.SetTitle("적재 미리보기");
             var plan = plans[0];
             status.text = $"<b>이번 조건에서는 {plan.Layers}단으로 미리 봐요</b>\n한 단에 {plan.PerLayer}개 · 팔레트당 총 {plan.Total}개\n전체 높이 {plan.StackHeight:F2}m · 화물 무게 {plan.TotalWeight:F1}kg\n바닥 사용률 {plan.Utilization:F0}%\n등록 규격 35 × 48 × 32cm\n{plan.Message}\n실제 적재 전 포장 강도·결속을 확인하세요.";
@@ -196,5 +202,22 @@ public static class StackingUIReview
         var text = label.GetComponent<Text>(); text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         text.color = Color.white; text.alignment = TextAnchor.MiddleCenter;
         return go.GetComponent<Button>();
+    }
+
+    private static WarehouseStrategy ReviewStrategy(string name, StackOrientation orientation, StackingPlan plan)
+    {
+        return new WarehouseStrategy
+        {
+            Name = name,
+            Orientation = orientation,
+            Plan = plan,
+            PerLayer = plan.PerLayer,
+            Layers = plan.Layers,
+            PerPallet = plan.Total,
+            StackHeightM = plan.StackHeight,
+            WeightKg = plan.TotalWeight,
+            FloorUtilizationPercent = plan.Utilization,
+            Message = plan.Message
+        };
     }
 }

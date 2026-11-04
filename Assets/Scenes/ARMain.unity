@@ -173,7 +173,6 @@ MonoBehaviour:
   detectionBridge: {fileID: 1823441576}
   geminiClient: {fileID: 968023335}
   productDatabase: {fileID: 0}
-  safetyFactor: 0.8
   minConfidence: 0.5
 --- !u!1 &19058831
 GameObject:
@@ -1393,17 +1392,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARLogistics.Features.ARMainPalletStackPreview
   raycastManager: {fileID: 915489163}
+  planeManager: {fileID: 0}
   arCamera: {fileID: 1684441339}
   palletPrefab: {fileID: 5808244523230037948, guid: be196272e7776504bbed2eb64cb9d614, type: 3}
   boxPreviewPrefab: {fileID: 1133674978017730884, guid: 8369d0bfcf494074795b75c3bcf2d69a, type: 3}
   statusText: {fileID: 1172950230}
   placeButton: {fileID: 1326389965}
   resetButton: {fileID: 102941728}
+  boxesPerFrame: 24
   palletWidth: 1.2
   palletLength: 1
   palletHeight: 0.15
-  recommendedStackHeight: 1.8
-  previewHeight: 2.1
   boxGap: 0.02
   safeColor: {r: 0.1, g: 0.9, b: 0.25, a: 0.85}
   overHeightColor: {r: 1, g: 0.15, b: 0.1, a: 0.9}

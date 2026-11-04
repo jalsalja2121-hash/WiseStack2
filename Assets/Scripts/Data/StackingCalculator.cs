@@ -9,6 +9,8 @@ namespace ARLogistics.Data
         public int Columns, Rows, Layers, HeightLayers, WeightLayers;
         public float BoxWidth, BoxLength, StackHeight, TotalWeight, Utilization;
         public string Message;
+        // Zero input denotes missing weight, never a verified zero-mass cargo.
+        public bool LoadVerified;
         public int PerLayer { get { return Columns * Rows; } }
         public int Total { get { return PerLayer * Layers; } }
     }
@@ -43,7 +45,8 @@ namespace ARLogistics.Data
             if (p.PerLayer == 0) { p.Message = "이 방향으로는 상자가 팔레트 안에 들어가지 않아요."; return p; }
             float heightLimit = Math.Min(PreviewHeightLimit, ceiling - Headroom);
             p.HeightLayers = Fit(Math.Max(0, heightLimit - PalletHeight), height);
-            p.WeightLayers = weight > 0.01f ? Fit(maxLoad, weight * p.PerLayer) : p.HeightLayers;
+            p.LoadVerified = weight > 0;
+            p.WeightLayers = maxLoad == 0 ? 0 : p.LoadVerified ? Fit(maxLoad, weight * p.PerLayer) : p.HeightLayers;
             p.Layers = Math.Min(p.HeightLayers, p.WeightLayers);
             if (isPallet) p.Layers = Math.Min(1, p.Layers);
             p.Layers = Math.Min(p.Layers, int.MaxValue / p.PerLayer);
@@ -54,12 +57,13 @@ namespace ARLogistics.Data
                 ? (p.HeightLayers == 0 ? "높이가 부족해 한 단도 쌓을 수 없어요." : "한 단의 무게가 팔레트 허용 하중을 넘어요.")
                 : (p.WeightLayers < p.HeightLayers ? "하중 제한에 맞춰 단수를 줄였어요."
                     : (heightLimit < PreviewHeightLimit ? "천장 아래 30cm를 비워 두었어요." : "팔레트 포함 1.8m 이내로 제한했어요."));
+            if (!p.LoadVerified) p.Message += " 화물 무게 누락: 하중 확인 필요. 기하학적 예상 수량입니다.";
             return p;
         }
 
         public static int Fit(float available, float required)
         {
-            if (!Finite(available) || available <= 0 || !Positive(required)) return 0;
+            if (!Finite(available) || available <= 0 || !Finite(required) || required <= 0) return 0;
             // Float-derived metre dimensions can be just below an exact multiple.
             return (int)Math.Min(1000000, Math.Floor((double)available / required + 0.000001));
         }

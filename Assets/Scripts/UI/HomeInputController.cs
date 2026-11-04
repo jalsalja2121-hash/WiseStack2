@@ -22,6 +22,8 @@ namespace ARLogistics.UI
         private RectTransform voiceRect;
         private Rect lastSafeArea;
         private Vector2 lastCanvasSize;
+        private HomeSetupView presentation;
+        private static bool hasConfirmedSettings;
 
         private void Awake()
         {
@@ -59,7 +61,7 @@ namespace ARLogistics.UI
                 if (!card && !input) continue;
 
                 var border = surface.GetComponent<Outline>() ?? surface.gameObject.AddComponent<Outline>();
-                border.effectColor = new Color(0.82f, 0.88f, 0.94f, 0.8f);
+                border.effectColor = WiseStackTheme.Border;
                 border.effectDistance = new Vector2(1f, -1f);
                 if (!card) continue;
                 Shadow shadow = null;
@@ -71,9 +73,9 @@ namespace ARLogistics.UI
             }
         }
 
-        private static void WireButton(string goName, UnityEngine.Events.UnityAction action)
+        private void WireButton(string goName, UnityEngine.Events.UnityAction action)
         {
-            var go = GameObject.Find(goName);
+            var go = WiseStackUI.Find<RectTransform>(transform,goName)?.gameObject;
             if (go == null) return;
             var btn = go.GetComponent<Button>();
             if (btn == null) return;
@@ -81,10 +83,9 @@ namespace ARLogistics.UI
             btn.onClick.AddListener(action);
         }
 
-        private static InputField FindInputByName(string goName)
+        private InputField FindInputByName(string goName)
         {
-            var go = GameObject.Find(goName);
-            return go != null ? go.GetComponent<InputField>() : null;
+            return WiseStackUI.Find<InputField>(transform,goName);
         }
 
         private static void WireInputField(InputField field)
@@ -113,6 +114,12 @@ namespace ARLogistics.UI
         private void Start()
         {
             PopulateFields();
+            presentation = new HomeSetupView();
+            presentation.Build(transform, new[] { warehouseAreaInput, ceilingHeightInput, palletWidthInput, palletLengthInput, palletMaxLoadInput }, GoToMeasure);
+            presentation.SetProvenance(hasConfirmedSettings);
+            WireButton("StackPreviewBtn", GoToARMain);
+            WireButton("DangerOverlayBtn", GoToDanger);
+            WireButton("MeasurementBtn", GoToMeasure);
             PositionHomePanels();
         }
 
@@ -125,6 +132,13 @@ namespace ARLogistics.UI
 
         private void PositionHomePanels()
         {
+            if (presentation != null)
+            {
+                presentation.Layout();
+                lastSafeArea = Screen.safeArea;
+                lastCanvasSize = ((RectTransform)transform).rect.size;
+                return;
+            }
             RectTransform canvasRect = transform as RectTransform;
             Canvas canvas = GetComponent<Canvas>();
             if (canvasRect == null || canvas == null) return;
@@ -148,35 +162,13 @@ namespace ARLogistics.UI
 
         public void ConfirmManualSave()
         {
-            if (!TryRead(warehouseAreaInput, out float area) ||
-                !TryRead(ceilingHeightInput, out float height) ||
-                !TryRead(palletWidthInput, out float width) ||
-                !TryRead(palletLengthInput, out float length) ||
-                !TryRead(palletMaxLoadInput, out float load) ||
-                area <= 0f || height <= 0f || load < 0f ||
-                width < AppSettings.MinPalletDimensionM || width > AppSettings.MaxPalletDimensionM ||
-                length < AppSettings.MinPalletDimensionM || length > AppSettings.MaxPalletDimensionM)
-            {
-                SetSaveStatus("입력값을 확인해 주세요. 팔레트 길이는 0.3~3m여야 합니다.");
-                return;
-            }
-
-            SaveSettings();
-            if (AppSettings.WarehouseAreaM2 != area || AppSettings.CeilingHeightM != height ||
-                AppSettings.PalletWidth != width || AppSettings.PalletLength != length ||
-                AppSettings.PalletMaxLoadKg != load)
-            {
-                SetSaveStatus("창고 정보를 저장하지 못했습니다. 입력값을 확인해 주세요.");
-                return;
-            }
-
-            ShowConfirmation("창고 정보 저장 완료",
-                $"입력한 창고 정보가 정상적으로 저장되었습니다.\n\n창고 {area:F1}㎡ · 높이 {height:F2}m\n팔레트 {width:F2} × {length:F2}m · 최대 {load:F0}kg");
+            if (TrySaveSettings(out string summary))
+                ShowConfirmation("창고 정보 저장 완료", summary + "\n측정 화면에서 화물을 분류하면 적재·추천을 확인할 수 있습니다.");
         }
 
-        private static void SetSaveStatus(string message)
+        private void SetSaveStatus(string message)
         {
-            Text status = GameObject.Find("VoiceStatusText")?.GetComponent<Text>();
+            Text status = WiseStackUI.Find<Text>(transform,"VoiceStatusText");
             if (status != null) status.text = message;
         }
 
@@ -213,22 +205,23 @@ namespace ARLogistics.UI
             card.anchorMin = new Vector2(0.08f, 0.29f);
             card.anchorMax = new Vector2(0.92f, 0.71f);
             card.offsetMin = card.offsetMax = Vector2.zero;
-            card.GetComponent<Image>().color = Color.white;
-            PopupText(card, "Title", title, 48, new Vector2(0.07f, 0.73f), new Vector2(0.93f, 0.95f), true);
-            PopupText(card, "Message", message, 34, new Vector2(0.07f, 0.25f), new Vector2(0.93f, 0.73f), false);
+            WiseStackUI.Surface(card,WiseStackTheme.Card);
+            PopupText(card, "Title", title, 32, new Vector2(0.07f, 0.73f), new Vector2(0.93f, 0.95f), true);
+            PopupText(card, "Message", message, 26, new Vector2(0.07f, 0.25f), new Vector2(0.93f, 0.73f), false);
             var button = new GameObject("Confirm", typeof(RectTransform), typeof(Image), typeof(Button)).GetComponent<RectTransform>();
             button.SetParent(card, false);
             button.anchorMin = new Vector2(0.28f, 0.04f);
             button.anchorMax = new Vector2(0.72f, 0.22f);
             button.offsetMin = button.offsetMax = Vector2.zero;
-            button.GetComponent<Image>().color = new Color(0.09f, 0.39f, 0.78f, 1f);
+            button.GetComponent<Image>().color = WiseStackTheme.Blue;
             button.GetComponent<Button>().onClick.AddListener(() =>
             {
                 GameObject popup = confirmationPopup;
                 confirmationPopup = null;
                 Destroy(popup);
             });
-            PopupText(button, "Label", "확인", 36, Vector2.zero, Vector2.one, true).color = Color.white;
+            PopupText(button, "Label", "확인", 28, Vector2.zero, Vector2.one, true).color = Color.white;
+            WiseStackUI.StyleButton(button.GetComponent<Button>());
         }
 
         private static Text PopupText(Transform parent, string name, string value, int size,
@@ -243,7 +236,7 @@ namespace ARLogistics.UI
             text.fontSize = size;
             text.fontStyle = bold ? FontStyle.Bold : FontStyle.Normal;
             text.alignment = TextAnchor.MiddleCenter;
-            text.color = new Color(0.075f, 0.14f, 0.23f, 1f);
+            text.color = WiseStackTheme.Navy;
             text.text = value;
             text.raycastTarget = false;
             return text;
@@ -258,33 +251,57 @@ namespace ARLogistics.UI
             if (palletMaxLoadInput) palletMaxLoadInput.text = AppSettings.PalletMaxLoadKg.ToString("F0", CultureInfo.InvariantCulture);
         }
 
-        private void SaveSettings()
+        private bool TrySaveSettings(out string summary)
         {
-            if (warehouseAreaInput != null &&
-                float.TryParse(warehouseAreaInput.text, NumberStyles.Float, CultureInfo.InvariantCulture, out float area))
-                AppSettings.WarehouseAreaM2 = area;
-
-            if (ceilingHeightInput != null &&
-                float.TryParse(ceilingHeightInput.text, NumberStyles.Float, CultureInfo.InvariantCulture, out float ceiling))
-                AppSettings.CeilingHeightM = ceiling;
-
-            if (palletWidthInput != null &&
-                float.TryParse(palletWidthInput.text, NumberStyles.Float, CultureInfo.InvariantCulture, out float pw))
-                AppSettings.PalletWidth = pw;
-
-            if (palletLengthInput != null &&
-                float.TryParse(palletLengthInput.text, NumberStyles.Float, CultureInfo.InvariantCulture, out float pl))
-                AppSettings.PalletLength = pl;
-
-            if (palletMaxLoadInput != null &&
-                float.TryParse(palletMaxLoadInput.text, NumberStyles.Float, CultureInfo.InvariantCulture, out float pm))
-                AppSettings.PalletMaxLoadKg = pm;
+            summary = null;
+            if (!TryRead(warehouseAreaInput, out float area) || area <= 0f || area > 1000000f)
+            {
+                presentation?.Error(warehouseAreaInput,"0 초과~1,000,000㎡ 범위로 입력하세요.");
+                SetSaveStatus("창고 면적을 0보다 큰 값으로 입력해 주세요 (㎡).");
+                return false;
+            }
+            if (!TryRead(ceilingHeightInput, out float ceiling) || ceiling <= 0f)
+            {
+                presentation?.Error(ceilingHeightInput,"0보다 큰 높이를 입력하세요.");
+                SetSaveStatus("창고 높이를 0보다 큰 값으로 입력해 주세요 (m).");
+                return false;
+            }
+            if (!TryRead(palletWidthInput, out float width) ||
+                width < AppSettings.MinPalletDimensionM || width > AppSettings.MaxPalletDimensionM)
+            {
+                presentation?.Error(palletWidthInput,"가로를 0.3~3m로 입력하세요.");
+                SetSaveStatus("팔레트 가로를 0.3~3m로 입력해 주세요.");
+                return false;
+            }
+            if (!TryRead(palletLengthInput, out float length) ||
+                length < AppSettings.MinPalletDimensionM || length > AppSettings.MaxPalletDimensionM)
+            {
+                presentation?.Error(palletLengthInput,"세로를 0.3~3m로 입력하세요.");
+                SetSaveStatus("팔레트 세로를 0.3~3m로 입력해 주세요.");
+                return false;
+            }
+            if (!TryRead(palletMaxLoadInput, out float load) || load < 0f)
+            {
+                presentation?.Error(palletMaxLoadInput,"0kg 이상으로 입력하세요.");
+                SetSaveStatus("팔레트 최대 하중을 0kg 이상으로 입력해 주세요.");
+                return false;
+            }
+            AppSettings.WarehouseAreaM2 = area;
+            AppSettings.CeilingHeightM = ceiling;
+            AppSettings.PalletWidth = width;
+            AppSettings.PalletLength = length;
+            AppSettings.PalletMaxLoadKg = load;
+            hasConfirmedSettings=true;
+            presentation?.SetProvenance(true);
+            summary = $"창고 {area:F1}㎡ · 높이 {ceiling:F2}m\n팔레트 {width:F2} × {length:F2}m · 최대 {load:F0}kg";
+            SetSaveStatus("입력 완료 · 측정 화면으로 이동해 화물을 분류하세요.");
+            return true;
         }
 
         // Called by NavBar buttons
         public void GoToARMain()
         {
-            SaveSettings();
+            if (!TrySaveSettings(out _)) return;
             var navigator = FindFirstObjectByType<SceneNavigator>();
             if (navigator != null)
             {
@@ -297,13 +314,13 @@ namespace ARLogistics.UI
 
         public void GoToDanger()
         {
-            SaveSettings();
+            if (!TrySaveSettings(out _)) return;
             SceneManager.LoadScene("DangerScene");
         }
 
         public void GoToMeasure()
         {
-            SaveSettings();
+            if (!TrySaveSettings(out _)) return;
             SceneManager.LoadScene("MeasureScene");
         }
     }

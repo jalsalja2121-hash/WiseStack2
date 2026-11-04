@@ -62,7 +62,7 @@ public sealed class RecommendationChoiceChecks
     };
 
     [UnityTest]
-    public IEnumerator Cards_SelectOnlyTheirOwnDetail()
+    public IEnumerator Recommendation_ShowsComparisonAndTogglesCalculationDetails()
     {
         bool[] existed = Keys.Select(PlayerPrefs.HasKey).ToArray();
         string[] values = Keys.Select(key => PlayerPrefs.GetString(key)).ToArray();
@@ -76,15 +76,28 @@ public sealed class RecommendationChoiceChecks
             SceneManager.LoadScene("DangerScene");
             yield return null;
             yield return null;
-            Assert.IsNotNull(GameObject.Find("StrategyChoices"));
+            Assert.IsNotNull(GameObject.Find("StrategyComparison"));
             Assert.IsNull(GameObject.Find("ZoneMap"));
-            Text detail = GameObject.Find("선택한 전략 상세Card")?.GetComponentInChildren<Text>();
-            Assert.IsNotNull(detail);
+            var view = GameObject.Find("RecommendedStrategy");
+            Assert.IsNotNull(view);
+            var content = view.transform.parent;
+            var detail = content.Find("RecommendationDetails").gameObject;
+            var toggle = content.Find("RecommendationDetailsButton").GetComponent<Button>();
+            Assert.IsFalse(detail.activeSelf);
+            toggle.onClick.Invoke();
+            Assert.IsTrue(detail.activeSelf);
+            var text = string.Join("\n", detail.GetComponentsInChildren<Text>().Select(t => t.text));
+            StringAssert.Contains("수량", text);
+            StringAssert.Contains("허용", text);
+            StringAssert.DoesNotContain("/100점", text);
             for (int i = 0; i < 3; i++)
             {
-                GameObject.Find("Strategy" + i).GetComponent<Button>().onClick.Invoke();
-                Assert.IsTrue(detail.text.Contains(new[] { "A · 표준 적재", "B · 공간 효율", "C · 낮은 적재 높이" }[i]));
+                Assert.IsNotNull(GameObject.Find("Strategy" + i));
+                StringAssert.Contains(new[] { "A · 표준 적재", "B · 공간 효율", "C · 낮은 높이" }[i], text);
             }
+            toggle.onClick.Invoke();
+            Assert.IsFalse(detail.activeSelf);
+            Assert.IsTrue(view.GetComponentInChildren<Button>().interactable);
         }
         finally
         {
