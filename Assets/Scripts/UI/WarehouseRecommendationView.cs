@@ -259,16 +259,45 @@ namespace ARLogistics.UI
             var toggle = Button(_content, "계산 근거와 한계 펼치기  +", null, false);
             toggle.name = "RecommendationDetailsButton";
             var panel = Card("RecommendationDetails");
-            Label(panel, "기준 · 수량 → 바닥 활용률 → 낮은 높이", 24, WiseStackTheme.Muted);
-            if (decision.HasRecommendation)
+            Label(panel, "선정 기준", 26, WiseStackTheme.Navy, true);
+            Label(panel, "수량 최대 → 바닥 활용률 → 낮은 높이\n" +
+                "확인 가능한 높이·하중·경계 조건 검토", 24, WiseStackTheme.Muted);
+
+            var winner = decision.HasRecommendation ? comparison.Get(decision.Index) : null;
+            var calculation = new StringBuilder();
+            if (winner != null)
             {
-                var winner = comparison.Get(decision.Index);
-                Label(panel, $"예상 · 창고 약 {winner.WarehouseCapacity:N0}개 (통로·설비 20% 제외)", 24, WiseStackTheme.Muted);
+                calculation.AppendLine($"한 층: 가로 {winner.Plan.Columns} × 세로 {winner.Plan.Rows} = {winner.PerLayer:N0}개");
+                calculation.AppendLine($"팔레트당: {winner.PerLayer:N0}개 × {winner.Layers}층 = {winner.PerPallet:N0}개");
+                calculation.AppendLine($"높이(m): {StackingCalculator.PalletHeight:G4} + {winner.Layers} × {source.Cargo.HeightM:G4} ≈ {winner.StackHeightM:F2}");
+                calculation.AppendLine(source.AssumedCargoWeightKg > 0
+                    ? $"하중(kg): {winner.PerPallet:N0} × {source.AssumedCargoWeightKg:G4} ≈ {winner.WeightKg:N2}"
+                    : "하중: 무게 미등록 · 하중 확인 필요");
             }
-            Label(panel, source.AssumedCargoWeightKg > 0
-                ? "하중 · 기준 무게 사용, 실제 무게 확인"
-                : "하중 · 무게 미등록, 하중 확인 필요", 24, WiseStackTheme.Muted);
-            Label(panel, "한계 · 현장 조건 미반영, 안전성 별도 확인", 24, WiseStackTheme.Muted);
+            else
+            {
+                calculation.AppendLine("한 층 = 가로 개수 × 세로 개수");
+                calculation.AppendLine("팔레트당 = 한 층 수량 × 층수");
+                calculation.AppendLine($"높이(m) = {StackingCalculator.PalletHeight:G4} + 층수 × 화물 높이");
+                calculation.AppendLine(source.AssumedCargoWeightKg > 0
+                    ? "화물 하중 = 팔레트당 수량 × 개당 무게"
+                    : "하중: 무게 미등록 · 하중 확인 필요");
+            }
+            float heightLimit = Mathf.Min(StackingCalculator.PreviewHeightLimit,
+                source.CeilingHeightM - StackingCalculator.Headroom);
+            calculation.AppendLine($"한도: 높이 {heightLimit:F2}m · 화물 {source.PalletMaxLoadKg:N0}kg");
+            calculation.Append(winner != null
+                ? $"창고: {comparison.PalletCount:N0}팔레트 × {winner.PerPallet:N0}개 ≈ {winner.WarehouseCapacity:N0}개"
+                : "전체 예상량: 추천 가능한 배치 없음");
+            Label(panel, "계산 근거", 26, WiseStackTheme.Navy, true);
+            Label(panel, calculation.ToString(), 24, WiseStackTheme.Muted);
+
+            Label(panel, "가정과 한계", 26, WiseStackTheme.Navy, true);
+            Label(panel, $"정사각형 창고 · 통로·설비 {WarehouseRecommendationCalculator.AssumedExcludedAreaFraction * 100:F0}% 제외\n" +
+                (source.AssumedCargoWeightKg > 0
+                    ? "분류별 기준 무게 사용, 실제 무게 확인\n"
+                    : "무게 누락 시 수량은 조건부 예상치\n") +
+                "현장 배치·포장·고정·안전성 별도 확인", 24, WiseStackTheme.Muted);
             panel.gameObject.SetActive(false);
             toggle.onClick.AddListener(() =>
             {
