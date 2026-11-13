@@ -259,42 +259,18 @@ namespace ARLogistics.UI
             var toggle = Button(_content, "계산 근거와 한계 펼치기  +", null, false);
             toggle.name = "RecommendationDetailsButton";
             var panel = Card("RecommendationDetails");
-            Label(panel, "전략별 계산과 조건 확인", 28, WiseStackTheme.Navy, true);
-            for (int i = 0; i < 3; i++)
-            {
-                var evaluation = decision.Evaluations[i];
-                var option = comparison.Get(i);
-                Label(panel, Names[i] + " · " + (evaluation != null && evaluation.Eligible
-                    ? $"{option.Plan.Columns} × {option.Plan.Rows} × {option.Layers} = {option.PerPallet:N0}개\n" +
-                        $"바닥면 {option.FloorUtilizationPercent:F1}% · 공간 {option.SpaceUtilizationPercent:F1}%\n" +
-                        $"높이 {option.StackHeightM:F2}m · 여유 {option.HeightReserveM:F2}m\n" +
-                        (evaluation.LoadVerified ? $"화물 {option.WeightKg:F2}kg ≤ 허용 {source.PalletMaxLoadKg:F2}kg" : "무게 누락 · 하중 확인 필요")
-                    : evaluation?.Exclusion ?? "배치 불가"), 24, WiseStackTheme.Muted);
-            }
-            Label(panel, decision.Criteria, 24, WiseStackTheme.Muted);
-            Label(panel, "수량 N = 가로 개수 × 세로 개수 × 층수. 바닥면 활용률 = 한 층 화물 바닥면적 / 팔레트 면적. " +
-                "총 높이 = 0.15m + 층수 × 화물 높이 ≤ 유효 높이 한도. 높이 여유 = 한도 − 총 높이. " +
-                "공간 활용률 = 화물 총부피 / (팔레트 면적 × (한도 − 0.15m)). " +
-                "화물 하중 = 수량 × 개당 기준 무게 ≤ 허용하중 (팔레트 자체 중량 제외). 활용률은 백분율로 표시합니다.", 24, WiseStackTheme.Muted);
-            var basis = new StringBuilder();
-            basis.AppendLine($"창고 {source.WarehouseAreaM2:N1}㎡ · 천장 {source.CeilingHeightM:F2}m");
-            basis.AppendLine($"팔레트 {source.PalletWidthM:F2} × {source.PalletLengthM:F2}m · 최대 하중 {source.PalletMaxLoadKg:N1}kg");
-            basis.AppendLine($"{source.CargoName}: {source.Cargo.WidthM:F2} × {source.Cargo.DepthM:F2} × {source.Cargo.HeightM:F2}m · " +
-                (source.AssumedCargoWeightKg > 0 ? $"기준 무게 {source.AssumedCargoWeightKg:F2}kg" : "무게 미등록"));
+            Label(panel, "핵심 요약", 28, WiseStackTheme.Navy, true);
+            Label(panel, "선정 · 수량 → 바닥면 활용률 → 낮은 높이 순으로 우선합니다.", 24, WiseStackTheme.Muted);
             if (decision.HasRecommendation)
             {
                 var winner = comparison.Get(decision.Index);
-                basis.AppendLine(decision.RequiresLoadConfirmation ? "선정안 하중 확인 필요" : $"선정안 하중 {winner.WeightKg:N1}kg · 바닥 사용률 {winner.FloorUtilizationPercent:F1}%");
-                basis.AppendLine($"창고 전체 예상 적재량: 약 {winner.WarehouseCapacity:N0}개");
-                basis.AppendLine($"예상 팔레트 {comparison.PalletCount:N0}개 × 팔레트당 {winner.PerPallet:N0}개");
+                Label(panel, $"수량 · 가로 {winner.Plan.Columns} × 세로 {winner.Plan.Rows} × {winner.Layers}층 = 팔레트당 {winner.PerPallet:N0}개\n" +
+                    $"창고 전체 약 {winner.WarehouseCapacity:N0}개 (통로·설비 20% 제외)", 24, WiseStackTheme.Muted);
             }
-            basis.AppendLine($"통로·설비 20% 제외 ({source.ExcludedAreaM2:N1}㎡), 사용 가능 {source.UsableAreaM2:N1}㎡.");
-            basis.AppendLine("정사각형 창고의 한쪽 깊이 20%를 제외한 직사각형에 팔레트를 배치한 개략치입니다. 창고 형상 및 통로 배치에 따라 실제 적재량은 달라질 수 있습니다.");
-            basis.Append("무게는 화물 분류별 기준값입니다. 기둥·출입구·재고량·바닥 하중·포장 강도·결속·전도 위험은 반영하지 않았습니다. 낮은 높이가 안전성을 보장하지 않습니다.");
-            Label(panel, "입력과 계산 범위", 28, WiseStackTheme.Navy, true);
-            Label(panel, basis.ToString(), 24, WiseStackTheme.Muted);
-            Label(panel, "ISO 6780(치수), ISO 8611(하중 시험), CTU Code(적재·고정)를 참고한 조건 검토입니다. " +
-                "기하학적 예상치이며 국제표준 준수·인증이나 실제 안전성을 보증하지 않습니다. 하중 분포·무게중심·고정 상태는 검증하지 않습니다.", 24, WiseStackTheme.Muted);
+            Label(panel, source.AssumedCargoWeightKg > 0
+                ? "하중 · 분류별 기준 무게로 계산하므로 실제 무게 확인이 필요합니다."
+                : "하중 · 무게 미등록으로 하중 확인 필요. 수량은 조건부 예상치입니다.", 24, WiseStackTheme.Muted);
+            Label(panel, "한계 · 정사각형 창고 기준 예상치입니다. 현장 배치·포장·고정 상태는 미반영이며 안전성을 보장하지 않습니다.", 24, WiseStackTheme.Muted);
             panel.gameObject.SetActive(false);
             toggle.onClick.AddListener(() =>
             {
