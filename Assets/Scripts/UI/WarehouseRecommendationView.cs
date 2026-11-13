@@ -259,18 +259,16 @@ namespace ARLogistics.UI
             var toggle = Button(_content, "계산 근거와 한계 펼치기  +", null, false);
             toggle.name = "RecommendationDetailsButton";
             var panel = Card("RecommendationDetails");
-            Label(panel, "핵심 요약", 28, WiseStackTheme.Navy, true);
-            Label(panel, "선정 · 수량 → 바닥면 활용률 → 낮은 높이 순으로 우선합니다.", 24, WiseStackTheme.Muted);
+            Label(panel, "기준 · 수량 → 바닥 활용률 → 낮은 높이", 24, WiseStackTheme.Muted);
             if (decision.HasRecommendation)
             {
                 var winner = comparison.Get(decision.Index);
-                Label(panel, $"수량 · 가로 {winner.Plan.Columns} × 세로 {winner.Plan.Rows} × {winner.Layers}층 = 팔레트당 {winner.PerPallet:N0}개\n" +
-                    $"창고 전체 약 {winner.WarehouseCapacity:N0}개 (통로·설비 20% 제외)", 24, WiseStackTheme.Muted);
+                Label(panel, $"예상 · 창고 약 {winner.WarehouseCapacity:N0}개 (통로·설비 20% 제외)", 24, WiseStackTheme.Muted);
             }
             Label(panel, source.AssumedCargoWeightKg > 0
-                ? "하중 · 분류별 기준 무게로 계산하므로 실제 무게 확인이 필요합니다."
-                : "하중 · 무게 미등록으로 하중 확인 필요. 수량은 조건부 예상치입니다.", 24, WiseStackTheme.Muted);
-            Label(panel, "한계 · 정사각형 창고 기준 예상치입니다. 현장 배치·포장·고정 상태는 미반영이며 안전성을 보장하지 않습니다.", 24, WiseStackTheme.Muted);
+                ? "하중 · 기준 무게 사용, 실제 무게 확인"
+                : "하중 · 무게 미등록, 하중 확인 필요", 24, WiseStackTheme.Muted);
+            Label(panel, "한계 · 현장 조건 미반영, 안전성 별도 확인", 24, WiseStackTheme.Muted);
             panel.gameObject.SetActive(false);
             toggle.onClick.AddListener(() =>
             {
